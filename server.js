@@ -36,10 +36,10 @@ function buildSummary(p) {
 }
 
 const PROMPTS = {
-  facebook: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie o postare Facebook profesională, caldă și convingătoare. Include emoji-uri relevante și detaliile cheie. La final include OBLIGATORIU:\n\n📞 0775 129 022\n🏢 SIMPLU Imobiliare Craiova\n🌐 SIMPLUIMOBILIARE.COM\n\nMax 300 cuvinte.\n\nProprietate:\n${info}`,
-  instagram: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie o postare Instagram captivantă cu emoji-uri. La final include OBLIGATORIU:\n\n📞 0775 129 022\n🏢 SIMPLU Imobiliare Craiova\n🌐 SIMPLUIMOBILIARE.COM\n\nDupă contact adaugă minim 15 hashtag-uri română+engleză. Max 200 cuvinte.\n\nProprietate:\n${info}`,
-  tiktok: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie un script TikTok scurt și energic cu hook puternic. La final include OBLIGATORIU:\n\n📞 0775 129 022\n🏢 SIMPLU Imobiliare Craiova\n🌐 SIMPLUIMOBILIARE.COM\n\nMax 150 cuvinte + hashtag-uri.\n\nProprietate:\n${info}`,
-  whatsapp: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie un mesaj WhatsApp concis și profesional. La final include OBLIGATORIU:\n\n📞 0775 129 022\n🏢 SIMPLU Imobiliare Craiova\n🌐 SIMPLUIMOBILIARE.COM\n\nMax 150 cuvinte.\n\nProprietate:\n${info}`,
+  facebook: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie o postare Facebook profesională, caldă și convingătoare. Include emoji-uri relevante și detaliile cheie. NU include număr de telefon sau date de contact. Max 300 cuvinte.\n\nProprietate:\n${info}`,
+  instagram: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie o postare Instagram captivantă cu emoji-uri și minim 15 hashtag-uri română+engleză. NU include număr de telefon sau date de contact. Max 200 cuvinte.\n\nProprietate:\n${info}`,
+  tiktok: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie un script TikTok scurt și energic cu hook puternic. NU include număr de telefon sau date de contact. Max 150 cuvinte + hashtag-uri.\n\nProprietate:\n${info}`,
+  whatsapp: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie un mesaj WhatsApp concis și profesional. NU include număr de telefon sau date de contact. Max 150 cuvinte.\n\nProprietate:\n${info}`,
 };
 
 // GET properties from CRM
