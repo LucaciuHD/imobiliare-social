@@ -137,8 +137,16 @@ app.post("/api/generate", async (req, res) => {
 
 // Serve frontend
 app.use(express.static("public"));
+app.use(express.static("."));
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  const fs = require("fs");
+  const publicPath = path.join(__dirname, "public", "index.html");
+  const rootPath = path.join(__dirname, "index.html");
+  if (fs.existsSync(publicPath)) {
+    res.sendFile(publicPath);
+  } else {
+    res.sendFile(rootPath);
+  }
 });
 
 const PORT = process.env.PORT || 3000;
