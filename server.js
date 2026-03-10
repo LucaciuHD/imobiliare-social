@@ -6,7 +6,6 @@ const path = require("path");
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
 
 const CRM_TOKEN = process.env.CRM_TOKEN || "8b5b5946671da2a80fc41481760673ab2868ba99";
 const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY || "";
@@ -137,6 +136,7 @@ app.post("/api/generate", async (req, res) => {
 });
 
 // Serve frontend
+app.use(express.static("public"));
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
