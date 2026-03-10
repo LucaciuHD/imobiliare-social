@@ -3,117 +3,330 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simplu Imobiliare — Social Media Generator</title>
+<title>SIMPLU Imobiliare — Social Media Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --gold-dim: rgba(201,168,76,0.12);
+    --gold-border: rgba(201,168,76,0.25);
+    --bg: #09080a;
+    --bg2: #111013;
+    --bg3: #1a1820;
+    --surface: #161419;
+    --border: rgba(255,255,255,0.06);
+    --text: #f0ead8;
+    --text-dim: #7a7268;
+    --text-mid: #b0a898;
+    --green: #2ecc71;
+  }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Segoe UI',sans-serif; background:#0f0e0c; color:#f0ead8; min-height:100vh; padding-bottom:60px; }
-
-  header { padding:20px 28px; border-bottom:1px solid #2e2b25; display:flex; align-items:center; gap:14px; }
-  .logo { width:38px; height:38px; border:1.5px solid #c9a84c; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:700; color:#c9a84c; font-size:15px; }
-  .badge { margin-left:auto; background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.3); color:#c9a84c; padding:4px 12px; border-radius:20px; font-size:11px; }
-
-  main { max-width:1100px; margin:0 auto; padding:32px 20px; }
-  .label { font-size:10px; letter-spacing:0.15em; text-transform:uppercase; color:#c9a84c; margin-bottom:10px; }
-
-  .top-bar { background:#1a1916; border:1px solid #2e2b25; border-radius:14px; padding:16px 22px; display:flex; align-items:center; gap:14px; margin-bottom:10px; }
-  .search-input { background:#0f0e0c; border:1px solid #2e2b25; border-radius:8px; padding:8px 14px; color:#f0ead8; font-size:13px; outline:none; flex:1; font-family:inherit; }
-  .search-input:focus { border-color:#c9a84c; }
-  .btn-gold { background:#c9a84c; color:#0f0e0c; border:none; border-radius:8px; padding:10px 22px; font-weight:600; font-size:14px; cursor:pointer; font-family:inherit; white-space:nowrap; }
-  .btn-gold:hover { background:#e8c97a; }
-  .btn-gold:disabled { background:#2e2b25; color:#7a7060; cursor:not-allowed; }
-
-  .error { background:rgba(255,80,80,0.08); border:1px solid rgba(255,80,80,0.2); color:#ff6b6b; border-radius:8px; padding:12px 16px; font-size:13px; margin-bottom:12px; display:none; }
-
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; margin:16px 0 28px; }
-  .prop-card { background:#1a1916; border:2px solid #2e2b25; border-radius:12px; overflow:hidden; cursor:pointer; transition:border-color 0.15s,transform 0.15s; }
-  .prop-card:hover { border-color:#c9a84c; transform:translateY(-2px); }
-  .prop-card.selected { border-color:#c9a84c; background:rgba(201,168,76,0.07); }
-  .prop-img { height:140px; background:#211f1b; overflow:hidden; position:relative; display:flex; align-items:center; justify-content:center; color:#7a7060; font-size:12px; }
-  .prop-img img { width:100%; height:100%; object-fit:cover; }
-  .check { position:absolute; top:8px; right:8px; background:#c9a84c; border-radius:50%; width:22px; height:22px; display:none; align-items:center; justify-content:center; font-size:11px; color:#000; font-weight:700; }
-  .prop-card.selected .check { display:flex; }
-  .prop-info { padding:12px 14px; }
-  .prop-type { font-size:10px; color:#c9a84c; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px; }
-  .prop-title { font-weight:600; font-size:13px; margin-bottom:4px; line-height:1.4; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-  .prop-price { color:#e8c97a; font-weight:600; font-size:14px; }
-  .prop-meta { color:#7a7060; font-size:12px; margin-top:2px; }
-
-  .pagination { display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:24px; }
-  .page-btn { background:#1a1916; border:1px solid #2e2b25; color:#f0ead8; border-radius:8px; padding:7px 16px; cursor:pointer; font-family:inherit; font-size:13px; }
-  .page-btn:hover:not(:disabled) { border-color:#c9a84c; color:#c9a84c; }
+  body {
+    font-family:'DM Sans',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    padding-bottom:80px;
+    background-image:
+      radial-gradient(ellipse 80% 40% at 50% -10%, rgba(201,168,76,0.07) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 30% at 90% 80%, rgba(201,168,76,0.04) 0%, transparent 60%);
+  }
+  header {
+    padding:0 40px; height:72px;
+    display:flex; align-items:center; gap:18px;
+    border-bottom:1px solid var(--border);
+    backdrop-filter:blur(20px);
+    position:sticky; top:0; z-index:100;
+    background:rgba(9,8,10,0.85);
+  }
+  .logo-svg { display:flex; align-items:center; flex-shrink:0; }
+  .logo-text h1 {
+    font-family:'Playfair Display',serif;
+    font-size:18px; font-weight:600; letter-spacing:0.02em;
+  }
+  .logo-text p {
+    font-size:10px; letter-spacing:0.2em;
+    text-transform:uppercase; color:var(--text-dim); font-weight:300;
+  }
+  .status-pill {
+    margin-left:auto;
+    display:flex; align-items:center; gap:7px;
+    background:rgba(46,204,113,0.08);
+    border:1px solid rgba(46,204,113,0.2);
+    border-radius:20px; padding:5px 14px;
+    font-size:11px; color:var(--green); letter-spacing:0.05em;
+  }
+  .status-dot {
+    width:6px; height:6px; border-radius:50%;
+    background:var(--green);
+    animation:pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  main { max-width:1160px; margin:0 auto; padding:40px 24px; }
+  .section-label {
+    font-size:10px; letter-spacing:0.2em;
+    text-transform:uppercase; color:var(--gold);
+    font-weight:500; margin-bottom:14px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .section-label::after {
+    content:''; flex:1; height:1px;
+    background:linear-gradient(to right, var(--gold-border), transparent);
+  }
+  .search-section { margin-bottom:32px; }
+  .search-bar {
+    display:flex; gap:12px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:16px; padding:10px 10px 10px 20px;
+    transition:border-color 0.2s;
+  }
+  .search-bar:focus-within { border-color:var(--gold-border); }
+  .search-input {
+    flex:1; background:transparent; border:none; outline:none;
+    font-family:'DM Sans',sans-serif; font-size:14px; color:var(--text);
+  }
+  .search-input::placeholder { color:var(--text-dim); }
+  .btn-primary {
+    background:linear-gradient(135deg,#c9a84c,#e8c97a,#c9a84c);
+    background-size:200% 200%;
+    color:#09080a; border:none; border-radius:10px;
+    padding:11px 28px; font-family:'DM Sans',sans-serif;
+    font-weight:600; font-size:14px; cursor:pointer;
+    white-space:nowrap; transition:all 0.3s;
+  }
+  .btn-primary:hover { background-position:right center; transform:translateY(-1px); box-shadow:0 8px 24px rgba(201,168,76,0.25); }
+  .btn-primary:disabled { background:var(--bg3); color:var(--text-dim); cursor:not-allowed; transform:none; box-shadow:none; }
+  .error-msg {
+    background:rgba(255,85,85,0.06); border:1px solid rgba(255,85,85,0.2);
+    color:#ff8080; border-radius:10px; padding:12px 18px;
+    font-size:13px; margin-top:12px; display:none;
+  }
+  .props-grid {
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+    gap:16px; margin:16px 0 24px;
+  }
+  .prop-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:16px; overflow:hidden; cursor:pointer;
+    transition:all 0.25s cubic-bezier(0.4,0,0.2,1);
+    animation:fadeUp 0.4s ease both;
+  }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  .prop-card:hover { border-color:var(--gold-border); transform:translateY(-3px); box-shadow:0 16px 40px rgba(0,0,0,0.4); }
+  .prop-card.selected { border-color:var(--gold); box-shadow:0 0 0 1px var(--gold),0 16px 40px rgba(201,168,76,0.15); background:rgba(201,168,76,0.04); }
+  .prop-img {
+    height:150px; background:var(--bg3); position:relative;
+    overflow:hidden; display:flex; align-items:center; justify-content:center;
+    color:var(--text-dim); font-size:11px; letter-spacing:0.05em;
+  }
+  .prop-img img { width:100%; height:100%; object-fit:cover; transition:transform 0.4s ease; }
+  .prop-card:hover .prop-img img { transform:scale(1.04); }
+  .prop-img-overlay {
+    position:absolute; inset:0;
+    background:linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%);
+    pointer-events:none;
+  }
+  .check-badge {
+    position:absolute; top:10px; right:10px;
+    width:26px; height:26px; background:var(--gold);
+    border-radius:50%; display:none; align-items:center; justify-content:center;
+    font-size:12px; color:#09080a; font-weight:700;
+    box-shadow:0 4px 12px rgba(201,168,76,0.4);
+    animation:popIn 0.2s cubic-bezier(0.4,0,0.2,1);
+  }
+  @keyframes popIn { from{transform:scale(0)} to{transform:scale(1)} }
+  .prop-card.selected .check-badge { display:flex; }
+  .prop-info { padding:14px 16px 16px; }
+  .prop-id {
+    display:inline-block; font-size:9px; letter-spacing:0.15em;
+    text-transform:uppercase; color:var(--gold);
+    background:var(--gold-dim); border:1px solid var(--gold-border);
+    border-radius:4px; padding:2px 7px; margin-bottom:7px; font-weight:600;
+  }
+  .prop-badges { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:7px; }
+  .prop-badge {
+    font-size:10px; color:var(--text-dim);
+    background:var(--bg3); border-radius:4px; padding:2px 7px; letter-spacing:0.05em;
+  }
+  .prop-badge.sale { color:#7eb8f7; background:rgba(126,184,247,0.08); }
+  .prop-badge.rent { color:#f7a07e; background:rgba(247,160,126,0.08); }
+  .prop-title {
+    font-weight:500; font-size:13px; line-height:1.45;
+    margin-bottom:8px; color:var(--text);
+    overflow:hidden; display:-webkit-box;
+    -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  }
+  .prop-price {
+    font-family:'Playfair Display',serif;
+    font-size:16px; font-weight:600; color:var(--gold-light); letter-spacing:0.02em;
+  }
+  .prop-meta { font-size:11px; color:var(--text-dim); margin-top:4px; }
+  .pagination {
+    display:flex; align-items:center; justify-content:center;
+    gap:10px; margin-bottom:28px;
+  }
+  .page-btn {
+    background:var(--surface); border:1px solid var(--border);
+    color:var(--text-mid); border-radius:10px; padding:8px 20px;
+    cursor:pointer; font-family:'DM Sans',sans-serif; font-size:13px; transition:all 0.2s;
+  }
+  .page-btn:hover:not(:disabled) { border-color:var(--gold-border); color:var(--gold); }
   .page-btn:disabled { opacity:0.3; cursor:not-allowed; }
-  .page-info { font-size:13px; color:#7a7060; }
-
-  .btn-generate { background:linear-gradient(135deg,#c9a84c,#e8c97a); color:#0f0e0c; border:none; border-radius:12px; padding:14px 48px; font-size:16px; font-weight:700; cursor:pointer; font-family:inherit; display:block; margin:0 auto; }
-  .btn-generate:disabled { background:#2e2b25; color:#7a7060; cursor:not-allowed; }
-  .selected-info { text-align:center; font-size:12px; color:#7a7060; margin-top:8px; }
-
-  .divider { border:none; border-top:1px solid #2e2b25; margin:36px 0; }
-  .tabs { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
-  .tab-btn { padding:8px 18px; border-radius:30px; border:1px solid #2e2b25; background:transparent; color:#7a7060; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; font-family:inherit; transition:all 0.15s; }
-
-  .post-box { background:#1a1916; border:1px solid #2e2b25; border-radius:14px; padding:28px; position:relative; min-height:140px; display:none; }
+  .page-info { font-size:13px; color:var(--text-dim); min-width:120px; text-align:center; }
+  .generate-wrap { text-align:center; margin:8px 0 32px; }
+  .btn-generate {
+    background:linear-gradient(135deg,#c9a84c,#e8c97a,#c9a84c);
+    background-size:200% 200%; color:#09080a; border:none;
+    border-radius:14px; padding:16px 56px;
+    font-family:'Playfair Display',serif; font-size:17px; font-weight:600;
+    cursor:pointer; letter-spacing:0.03em; transition:all 0.3s;
+    position:relative; overflow:hidden;
+  }
+  .btn-generate::before {
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(135deg,transparent 30%,rgba(255,255,255,0.15) 50%,transparent 70%);
+    transform:translateX(-100%); transition:transform 0.5s;
+  }
+  .btn-generate:hover::before { transform:translateX(100%); }
+  .btn-generate:hover { transform:translateY(-2px); box-shadow:0 12px 32px rgba(201,168,76,0.35); }
+  .btn-generate:disabled { background:var(--bg3); color:var(--text-dim); cursor:not-allowed; transform:none; box-shadow:none; }
+  .selected-info { font-size:12px; color:var(--text-dim); margin-top:10px; }
+  .divider {
+    border:none; border-top:1px solid var(--border);
+    margin:40px 0; position:relative;
+  }
+  .divider::after {
+    content:'✦'; position:absolute; left:50%; top:50%;
+    transform:translate(-50%,-50%);
+    background:var(--bg); padding:0 16px;
+    color:var(--gold); font-size:12px;
+  }
+  .tabs { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+  .tab-btn {
+    padding:9px 20px; border-radius:30px;
+    border:1px solid var(--border); background:transparent;
+    color:var(--text-dim); font-size:13px; font-family:'DM Sans',sans-serif;
+    cursor:pointer; display:flex; align-items:center; gap:7px;
+    transition:all 0.2s; font-weight:500;
+  }
+  .tab-btn:hover { border-color:var(--gold-border); color:var(--text); }
+  .post-box {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:18px; padding:32px; position:relative;
+    min-height:160px; display:none; animation:fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
   .post-box.visible { display:block; }
-  .post-text { font-size:15px; line-height:1.9; white-space:pre-wrap; padding-right:100px; }
-  .copy-btn { position:absolute; top:14px; right:14px; background:#211f1b; border:1px solid #2e2b25; color:#7a7060; border-radius:8px; padding:6px 14px; font-size:12px; cursor:pointer; font-family:inherit; }
-  .copy-btn:hover { color:#c9a84c; border-color:#c9a84c; }
-  .copy-btn.copied { color:#25d366; border-color:#25d366; }
-
-  .empty { text-align:center; padding:60px 20px; color:#7a7060; }
+  .post-box-header {
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid var(--border);
+  }
+  .post-platform-label { font-size:11px; letter-spacing:0.15em; text-transform:uppercase; color:var(--text-dim); font-weight:500; }
+  .copy-btn {
+    background:var(--bg3); border:1px solid var(--border);
+    color:var(--text-dim); border-radius:8px; padding:7px 16px;
+    font-size:12px; font-family:'DM Sans',sans-serif;
+    cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px; font-weight:500;
+  }
+  .copy-btn:hover { color:var(--gold); border-color:var(--gold-border); background:var(--gold-dim); }
+  .copy-btn.copied { color:var(--green); border-color:rgba(46,204,113,0.3); background:rgba(46,204,113,0.06); }
+  .post-text { font-size:15px; line-height:2; white-space:pre-wrap; color:var(--text); font-weight:300; }
+  .empty-state { text-align:center; padding:80px 20px; color:var(--text-dim); }
+  .empty-icon {
+    width:72px; height:72px; margin:0 auto 20px;
+    border:1px solid var(--border); border-radius:20px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:32px; background:var(--surface);
+  }
+  .empty-state p { font-size:14px; line-height:1.9; }
+  .spinner {
+    display:inline-block; width:14px; height:14px;
+    border:2px solid rgba(201,168,76,0.2); border-top-color:var(--gold);
+    border-radius:50%; animation:spin 0.6s linear infinite;
+    vertical-align:middle; margin-right:8px;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
   #propertiesSection { display:none; }
   #postsSection { display:none; }
-
-  .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(201,168,76,0.2); border-top-color:#c9a84c; border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:6px; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-
-  .status-dot { width:8px; height:8px; border-radius:50%; background:#25d366; display:inline-block; margin-right:6px; animation:pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">SI</div>
-  <div>
-    <div style="font-weight:600;font-size:17px">Simplu Imobiliare</div>
-    <div style="font-size:11px;color:#7a7060;letter-spacing:0.1em;text-transform:uppercase">Social Media Generator</div>
+  <div class="logo-svg">
+    <svg width="140" height="44" viewBox="0 0 140 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Circle with S -->
+      <circle cx="22" cy="22" r="20" fill="#F5C800"/>
+      <text x="22" y="29" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="22" font-weight="700" fill="#111">S</text>
+      <!-- Vertical separator -->
+      <rect x="48" y="6" width="2.5" height="32" fill="#F5C800" rx="1"/>
+      <!-- simplu text -->
+      <text x="58" y="21" font-family="Helvetica,Arial,sans-serif" font-size="13" font-weight="700" fill="#f0ead8" letter-spacing="0.5">simplu</text>
+      <!-- imobiliare text -->
+      <text x="58" y="36" font-family="Helvetica,Arial,sans-serif" font-size="13" font-weight="700" fill="#f0ead8" letter-spacing="0.5">imobiliare</text>
+    </svg>
   </div>
-  <div class="badge"><span class="status-dot"></span>Online</div>
+  <div class="logo-text">
+    <p>Social Media Generator</p>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot"></div>
+    Online
+  </div>
 </header>
 
 <main>
-  <div class="top-bar">
-    <input class="search-input" id="searchInput" placeholder="🔍 Caută proprietăți după titlu sau adresă..." onkeyup="handleSearch(event)">
-    <button class="btn-gold" id="loadBtn" onclick="loadProperties(1)">Încarcă Proprietăți</button>
+  <div class="search-section">
+    <div class="section-label">Caută Proprietăți</div>
+    <div class="search-bar">
+      <input class="search-input" id="searchInput" placeholder="Caută după titlu, adresă sau cod CP..." onkeyup="handleSearch(event)">
+      <button class="btn-primary" id="loadBtn" onclick="loadProperties(1)">Încarcă Proprietăți</button>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
   </div>
-  <div class="error" id="errorMsg"></div>
 
   <div id="propertiesSection">
-    <div class="label" id="propLabel">Proprietăți</div>
-    <div class="grid" id="propsGrid"></div>
+    <div class="section-label" id="propLabel">Selectează Proprietatea</div>
+    <div class="props-grid" id="propsGrid"></div>
     <div class="pagination" id="pagination"></div>
-    <button class="btn-generate" id="generateBtn" onclick="generateAllPosts()" disabled>✦ Generează Postări Social Media</button>
-    <div class="selected-info" id="selectedInfo"></div>
+    <div class="generate-wrap">
+      <button class="btn-generate" id="generateBtn" onclick="generateAllPosts()" disabled>✦ Generează Postări Social Media</button>
+      <div class="selected-info" id="selectedInfo"></div>
+    </div>
   </div>
 
   <div id="postsSection">
-    <hr class="divider">
-    <div class="label">Postări Generate</div>
+    <div class="divider"></div>
+    <div class="section-label">Postări Generate</div>
     <div class="tabs">
       <button class="tab-btn" id="tab-facebook" onclick="showTab('facebook')" style="background:#1877f2;color:#fff;border-color:transparent">📘 Facebook</button>
       <button class="tab-btn" id="tab-instagram" onclick="showTab('instagram')">📸 Instagram</button>
       <button class="tab-btn" id="tab-tiktok" onclick="showTab('tiktok')">🎵 TikTok</button>
       <button class="tab-btn" id="tab-whatsapp" onclick="showTab('whatsapp')">💬 WhatsApp</button>
     </div>
-    <div class="post-box visible" id="box-facebook"><button class="copy-btn" onclick="copyPost('facebook',this)">📋 Copiază</button><div class="post-text" id="text-facebook"></div></div>
-    <div class="post-box" id="box-instagram"><button class="copy-btn" onclick="copyPost('instagram',this)">📋 Copiază</button><div class="post-text" id="text-instagram"></div></div>
-    <div class="post-box" id="box-tiktok"><button class="copy-btn" onclick="copyPost('tiktok',this)">📋 Copiază</button><div class="post-text" id="text-tiktok"></div></div>
-    <div class="post-box" id="box-whatsapp"><button class="copy-btn" onclick="copyPost('whatsapp',this)">📋 Copiază</button><div class="post-text" id="text-whatsapp"></div></div>
+    <div class="post-box visible" id="box-facebook">
+      <div class="post-box-header"><span class="post-platform-label">📘 Facebook</span><button class="copy-btn" onclick="copyPost('facebook',this)">📋 Copiează</button></div>
+      <div class="post-text" id="text-facebook"></div>
+    </div>
+    <div class="post-box" id="box-instagram">
+      <div class="post-box-header"><span class="post-platform-label">📸 Instagram</span><button class="copy-btn" onclick="copyPost('instagram',this)">📋 Copiează</button></div>
+      <div class="post-text" id="text-instagram"></div>
+    </div>
+    <div class="post-box" id="box-tiktok">
+      <div class="post-box-header"><span class="post-platform-label">🎵 TikTok</span><button class="copy-btn" onclick="copyPost('tiktok',this)">📋 Copiează</button></div>
+      <div class="post-text" id="text-tiktok"></div>
+    </div>
+    <div class="post-box" id="box-whatsapp">
+      <div class="post-box-header"><span class="post-platform-label">💬 WhatsApp</span><button class="copy-btn" onclick="copyPost('whatsapp',this)">📋 Copiează</button></div>
+      <div class="post-text" id="text-whatsapp"></div>
+    </div>
   </div>
 
-  <div class="empty" id="emptyState">
-    <div style="font-size:44px;margin-bottom:14px">🏠</div>
-    <p style="font-size:14px;line-height:1.9">Apasă „Încarcă Proprietăți" pentru a vedea<br>proprietățile din CRM-ul tău.</p>
+  <div class="empty-state" id="emptyState">
+    <div class="empty-icon">🏠</div>
+    <p>Apasă „Încarcă Proprietăți" pentru a vedea<br>proprietățile active din CRM-ul tău.</p>
   </div>
 </main>
 
@@ -125,10 +338,7 @@ let selectedProp = null, currentPage = 1, totalPages = 1, searchQuery = '';
 let searchTimer = null;
 function handleSearch(e) {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    searchQuery = e.target.value;
-    loadProperties(1);
-  }, 400);
+  searchTimer = setTimeout(() => { searchQuery = e.target.value; loadProperties(1); }, 400);
 }
 
 async function loadProperties(page) {
@@ -137,7 +347,6 @@ async function loadProperties(page) {
   btn.innerHTML = '<span class="spinner"></span>Se încarcă...';
   document.getElementById('errorMsg').style.display = 'none';
   document.getElementById('emptyState').style.display = 'none';
-
   try {
     let url = `/api/properties?page=${page}`;
     if (searchQuery) url += `&search=${encodeURIComponent(searchQuery)}`;
@@ -145,13 +354,10 @@ async function loadProperties(page) {
     if (!res.ok) throw new Error('Eroare server: ' + res.status);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-
     const props = data.results || [];
     if (!props.length) throw new Error('Nu s-au găsit proprietăți.');
-
     currentPage = page;
     totalPages = Math.ceil((data.count || props.length) / 20);
-
     renderProps(props, data.count);
     renderPagination(data.count);
     document.getElementById('propertiesSection').style.display = 'block';
@@ -165,8 +371,8 @@ async function loadProperties(page) {
 }
 
 function renderProps(props, total) {
-  document.getElementById('propLabel').textContent = `Selectează Proprietatea (${total || props.length} total, pagina ${currentPage}/${totalPages})`;
-  document.getElementById('propsGrid').innerHTML = props.map(p => {
+  document.getElementById('propLabel').textContent = `Selectează Proprietatea — ${total || props.length} active, pagina ${currentPage}/${totalPages}`;
+  document.getElementById('propsGrid').innerHTML = props.map((p, i) => {
     const price = p.price_sale ? Number(p.price_sale).toLocaleString('ro-RO')+' EUR'
                 : p.price_rent ? Number(p.price_rent).toLocaleString('ro-RO')+' EUR/lună' : 'Preț la cerere';
     const type = p.property_type === 1 && p.apartment_type
@@ -175,18 +381,22 @@ function renderProps(props, total) {
     const meta = [p.surface_useful&&p.surface_useful+' mp', p.rooms&&p.rooms+' cam.', p.floor!=null&&'et.'+p.floor].filter(Boolean).join(' · ');
     const sel = selectedProp?.id === p.id ? 'selected' : '';
     const propJson = encodeURIComponent(JSON.stringify(p));
-    return `<div class="prop-card ${sel}" id="card-${p.id}" onclick="selectProp(this, '${propJson}')">
-      <div class="prop-img" id="img-${p.id}">📷 Se încarcă...<div class="check">✓</div></div>
+    const txBadge = p.transaction_type === 2 ? '<span class="prop-badge rent">Închiriere</span>' : '<span class="prop-badge sale">Vânzare</span>';
+    return `<div class="prop-card ${sel}" id="card-${p.id}" onclick="selectProp(this,'${propJson}')" style="animation-delay:${i*0.04}s">
+      <div class="prop-img" id="img-${p.id}">
+        <span>📷 Se încarcă...</span>
+        <div class="prop-img-overlay"></div>
+        <div class="check-badge">✓</div>
+      </div>
       <div class="prop-info">
-        <div class="prop-type">${p.transaction_type===2?'Închiriere':'Vânzare'} · ${type} · <span style="color:#c9a84c;font-weight:600">${p.display_id||'CP'+p.id}</span></div>
+        <div class="prop-id">${p.display_id||'CP'+p.id}</div>
+        <div class="prop-badges">${txBadge}<span class="prop-badge">${type}</span></div>
         <div class="prop-title">${p.title||p.street||'Proprietate'}</div>
         <div class="prop-price">${price}</div>
         <div class="prop-meta">${meta}</div>
       </div>
     </div>`;
   }).join('');
-
-  // Load images lazily for all rendered cards
   props.forEach(p => loadCardImage(p.id));
 }
 
@@ -199,16 +409,16 @@ async function loadCardImage(propId) {
     if (!imgEl) return;
     const firstImg = Array.isArray(images) ? images[0] : images?.results?.[0];
     if (firstImg?.url) {
-      const check = imgEl.querySelector('.check');
-      imgEl.innerHTML = `<img src="${firstImg.url}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='📷 Fără imagine'">`;
+      const check = imgEl.querySelector('.check-badge');
+      const overlay = imgEl.querySelector('.prop-img-overlay');
+      imgEl.innerHTML = `<img src="${firstImg.url}" alt="" style="width:100%;height:100%;object-fit:cover">`;
+      if (overlay) imgEl.appendChild(overlay);
       if (check) imgEl.appendChild(check);
     } else {
-      imgEl.innerHTML = '📷 Fără imagine<div class="check">✓</div>';
+      const span = imgEl.querySelector('span');
+      if (span) span.textContent = '📷 Fără imagine';
     }
-  } catch {
-    const imgEl = document.getElementById(`img-${propId}`);
-    if (imgEl) imgEl.innerHTML = '📷 Fără imagine<div class="check">✓</div>';
-  }
+  } catch {}
 }
 
 function renderPagination(total) {
@@ -225,7 +435,7 @@ function selectProp(el, propJson) {
   el.classList.add('selected');
   selectedProp = JSON.parse(decodeURIComponent(propJson));
   document.getElementById('generateBtn').disabled = false;
-  document.getElementById('selectedInfo').textContent = 'Selectat: ' + (selectedProp.title || selectedProp.street || '');
+  document.getElementById('selectedInfo').textContent = '✦ Selectat: ' + (selectedProp.display_id||'') + ' — ' + (selectedProp.title||selectedProp.street||'');
   document.getElementById('postsSection').style.display = 'none';
 }
 
@@ -234,13 +444,10 @@ async function generateAllPosts() {
   const btn = document.getElementById('generateBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Se generează...';
-
   document.getElementById('postsSection').style.display = 'block';
   PLATFORMS.forEach(p => { document.getElementById('text-'+p).textContent = '⏳ Se generează...'; });
   document.getElementById('postsSection').scrollIntoView({behavior:'smooth'});
-
   await Promise.all(PLATFORMS.map(platform => generatePost(platform)));
-
   btn.disabled = false;
   btn.innerHTML = '✦ Regenerează Postări';
 }
@@ -250,8 +457,7 @@ async function generatePost(platform) {
   el.textContent = '';
   try {
     const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ property: selectedProp, platform })
     });
     const reader = res.body.getReader();
@@ -267,9 +473,7 @@ async function generatePost(platform) {
         } catch {}
       }
     }
-  } catch(e) {
-    el.textContent = '⚠️ Eroare: ' + e.message;
-  }
+  } catch(e) { el.textContent = '⚠️ Eroare: ' + e.message; }
 }
 
 function showTab(id) {
@@ -277,8 +481,8 @@ function showTab(id) {
     document.getElementById('box-'+p).classList.remove('visible');
     const t = document.getElementById('tab-'+p);
     t.style.background = 'transparent';
-    t.style.color = '#7a7060';
-    t.style.borderColor = '#2e2b25';
+    t.style.color = '#7a7268';
+    t.style.borderColor = 'rgba(255,255,255,0.06)';
   });
   document.getElementById('box-'+id).classList.add('visible');
   const t = document.getElementById('tab-'+id);
@@ -289,9 +493,9 @@ function showTab(id) {
 
 async function copyPost(id, btn) {
   await navigator.clipboard.writeText(document.getElementById('text-'+id).textContent);
-  btn.textContent = '✓ Copiat!';
+  btn.innerHTML = '✓ Copiat!';
   btn.classList.add('copied');
-  setTimeout(() => { btn.textContent = '📋 Copiează'; btn.classList.remove('copied'); }, 2000);
+  setTimeout(() => { btn.innerHTML = '📋 Copiează'; btn.classList.remove('copied'); }, 2000);
 }
 
 function showError(msg) {
