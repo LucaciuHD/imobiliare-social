@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simplu Imobiliare — Social Media Generator</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',sans-serif; background:#0f0e0c; color:#f0ead8; min-height:100vh; padding-bottom:60px; }
+
+  header { padding:20px 28px; border-bottom:1px solid #2e2b25; display:flex; align-items:center; gap:14px; }
+  .logo { width:38px; height:38px; border:1.5px solid #c9a84c; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:700; color:#c9a84c; font-size:15px; }
+  .badge { margin-left:auto; background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.3); color:#c9a84c; padding:4px 12px; border-radius:20px; font-size:11px; }
+
+  main { max-width:1100px; margin:0 auto; padding:32px 20px; }
+  .label { font-size:10px; letter-spacing:0.15em; text-transform:uppercase; color:#c9a84c; margin-bottom:10px; }
+
+  .top-bar { background:#1a1916; border:1px solid #2e2b25; border-radius:14px; padding:16px 22px; display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+  .search-input { background:#0f0e0c; border:1px solid #2e2b25; border-radius:8px; padding:8px 14px; color:#f0ead8; font-size:13px; outline:none; flex:1; font-family:inherit; }
+  .search-input:focus { border-color:#c9a84c; }
+  .btn-gold { background:#c9a84c; color:#0f0e0c; border:none; border-radius:8px; padding:10px 22px; font-weight:600; font-size:14px; cursor:pointer; font-family:inherit; white-space:nowrap; }
+  .btn-gold:hover { background:#e8c97a; }
+  .btn-gold:disabled { background:#2e2b25; color:#7a7060; cursor:not-allowed; }
+
+  .error { background:rgba(255,80,80,0.08); border:1px solid rgba(255,80,80,0.2); color:#ff6b6b; border-radius:8px; padding:12px 16px; font-size:13px; margin-bottom:12px; display:none; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; margin:16px 0 28px; }
+  .prop-card { background:#1a1916; border:2px solid #2e2b25; border-radius:12px; overflow:hidden; cursor:pointer; transition:border-color 0.15s,transform 0.15s; }
+  .prop-card:hover { border-color:#c9a84c; transform:translateY(-2px); }
+  .prop-card.selected { border-color:#c9a84c; background:rgba(201,168,76,0.07); }
+  .prop-img { height:140px; background:#211f1b; overflow:hidden; position:relative; display:flex; align-items:center; justify-content:center; color:#7a7060; font-size:12px; }
+  .prop-img img { width:100%; height:100%; object-fit:cover; }
+  .check { position:absolute; top:8px; right:8px; background:#c9a84c; border-radius:50%; width:22px; height:22px; display:none; align-items:center; justify-content:center; font-size:11px; color:#000; font-weight:700; }
+  .prop-card.selected .check { display:flex; }
+  .prop-info { padding:12px 14px; }
+  .prop-type { font-size:10px; color:#c9a84c; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px; }
+  .prop-title { font-weight:600; font-size:13px; margin-bottom:4px; line-height:1.4; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .prop-price { color:#e8c97a; font-weight:600; font-size:14px; }
+  .prop-meta { color:#7a7060; font-size:12px; margin-top:2px; }
+
+  .pagination { display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:24px; }
+  .page-btn { background:#1a1916; border:1px solid #2e2b25; color:#f0ead8; border-radius:8px; padding:7px 16px; cursor:pointer; font-family:inherit; font-size:13px; }
+  .page-btn:hover:not(:disabled) { border-color:#c9a84c; color:#c9a84c; }
+  .page-btn:disabled { opacity:0.3; cursor:not-allowed; }
+  .page-info { font-size:13px; color:#7a7060; }
+
+  .btn-generate { background:linear-gradient(135deg,#c9a84c,#e8c97a); color:#0f0e0c; border:none; border-radius:12px; padding:14px 48px; font-size:16px; font-weight:700; cursor:pointer; font-family:inherit; display:block; margin:0 auto; }
+  .btn-generate:disabled { background:#2e2b25; color:#7a7060; cursor:not-allowed; }
+  .selected-info { text-align:center; font-size:12px; color:#7a7060; margin-top:8px; }
+
+  .divider { border:none; border-top:1px solid #2e2b25; margin:36px 0; }
+  .tabs { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+  .tab-btn { padding:8px 18px; border-radius:30px; border:1px solid #2e2b25; background:transparent; color:#7a7060; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; font-family:inherit; transition:all 0.15s; }
+
+  .post-box { background:#1a1916; border:1px solid #2e2b25; border-radius:14px; padding:28px; position:relative; min-height:140px; display:none; }
+  .post-box.visible { display:block; }
+  .post-text { font-size:15px; line-height:1.9; white-space:pre-wrap; padding-right:100px; }
+  .copy-btn { position:absolute; top:14px; right:14px; background:#211f1b; border:1px solid #2e2b25; color:#7a7060; border-radius:8px; padding:6px 14px; font-size:12px; cursor:pointer; font-family:inherit; }
+  .copy-btn:hover { color:#c9a84c; border-color:#c9a84c; }
+  .copy-btn.copied { color:#25d366; border-color:#25d366; }
+
+  .empty { text-align:center; padding:60px 20px; color:#7a7060; }
+  #propertiesSection { display:none; }
+  #postsSection { display:none; }
+
+  .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(201,168,76,0.2); border-top-color:#c9a84c; border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .status-dot { width:8px; height:8px; border-radius:50%; background:#25d366; display:inline-block; margin-right:6px; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SI</div>
+  <div>
+    <div style="font-weight:600;font-size:17px">Simplu Imobiliare</div>
+    <div style="font-size:11px;color:#7a7060;letter-spacing:0.1em;text-transform:uppercase">Social Media Generator</div>
+  </div>
+  <div class="badge"><span class="status-dot"></span>Online</div>
+</header>
+
+<main>
+  <div class="top-bar">
+    <input class="search-input" id="searchInput" placeholder="🔍 Caută proprietăți după titlu sau adresă..." onkeyup="handleSearch(event)">
+    <button class="btn-gold" id="loadBtn" onclick="loadProperties(1)">Încarcă Proprietăți</button>
+  </div>
+  <div class="error" id="errorMsg"></div>
+
+  <div id="propertiesSection">
+    <div class="label" id="propLabel">Proprietăți</div>
+    <div class="grid" id="propsGrid"></div>
+    <div class="pagination" id="pagination"></div>
+    <button class="btn-generate" id="generateBtn" onclick="generateAllPosts()" disabled>✦ Generează Postări Social Media</button>
+    <div class="selected-info" id="selectedInfo"></div>
+  </div>
+
+  <div id="postsSection">
+    <hr class="divider">
+    <div class="label">Postări Generate</div>
+    <div class="tabs">
+      <button class="tab-btn" id="tab-facebook" onclick="showTab('facebook')" style="background:#1877f2;color:#fff;border-color:transparent">📘 Facebook</button>
+      <button class="tab-btn" id="tab-instagram" onclick="showTab('instagram')">📸 Instagram</button>
+      <button class="tab-btn" id="tab-tiktok" onclick="showTab('tiktok')">🎵 TikTok</button>
+      <button class="tab-btn" id="tab-whatsapp" onclick="showTab('whatsapp')">💬 WhatsApp</button>
+    </div>
+    <div class="post-box visible" id="box-facebook"><button class="copy-btn" onclick="copyPost('facebook',this)">📋 Copiază</button><div class="post-text" id="text-facebook"></div></div>
+    <div class="post-box" id="box-instagram"><button class="copy-btn" onclick="copyPost('instagram',this)">📋 Copiază</button><div class="post-text" id="text-instagram"></div></div>
+    <div class="post-box" id="box-tiktok"><button class="copy-btn" onclick="copyPost('tiktok',this)">📋 Copiază</button><div class="post-text" id="text-tiktok"></div></div>
+    <div class="post-box" id="box-whatsapp"><button class="copy-btn" onclick="copyPost('whatsapp',this)">📋 Copiază</button><div class="post-text" id="text-whatsapp"></div></div>
+  </div>
+
+  <div class="empty" id="emptyState">
+    <div style="font-size:44px;margin-bottom:14px">🏠</div>
+    <p style="font-size:14px;line-height:1.9">Apasă „Încarcă Proprietăți" pentru a vedea<br>proprietățile din CRM-ul tău.</p>
+  </div>
+</main>
+
+<script>
+const PLATFORMS = ['facebook','instagram','tiktok','whatsapp'];
+const TAB_COLORS = {facebook:'#1877f2',instagram:'#e1306c',tiktok:'#ff0050',whatsapp:'#25d366'};
+let selectedProp = null, currentPage = 1, totalPages = 1, searchQuery = '';
+
+let searchTimer = null;
+function handleSearch(e) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    searchQuery = e.target.value;
+    loadProperties(1);
+  }, 400);
+}
+
+async function loadProperties(page) {
+  const btn = document.getElementById('loadBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Se încarcă...';
+  document.getElementById('errorMsg').style.display = 'none';
+  document.getElementById('emptyState').style.display = 'none';
+
+  try {
+    let url = `/api/properties?page=${page}`;
+    if (searchQuery) url += `&search=${encodeURIComponent(searchQuery)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Eroare server: ' + res.status);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const props = data.results || [];
+    if (!props.length) throw new Error('Nu s-au găsit proprietăți.');
+
+    currentPage = page;
+    totalPages = Math.ceil((data.count || props.length) / 20);
+
+    renderProps(props, data.count);
+    renderPagination(data.count);
+    document.getElementById('propertiesSection').style.display = 'block';
+  } catch(e) {
+    showError(e.message);
+    document.getElementById('emptyState').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Reîncarcă';
+  }
+}
+
+function renderProps(props, total) {
+  document.getElementById('propLabel').textContent = `Selectează Proprietatea (${total || props.length} total, pagina ${currentPage}/${totalPages})`;
+  document.getElementById('propsGrid').innerHTML = props.map(p => {
+    const img = p.images?.[0]?.url || '';
+    const price = p.price_sale ? Number(p.price_sale).toLocaleString('ro-RO')+' EUR'
+                : p.price_rent ? Number(p.price_rent).toLocaleString('ro-RO')+' EUR/lună' : 'Preț la cerere';
+    const type = p.property_type === 1 && p.apartment_type
+      ? {1:'Garsonieră',2:'2 camere',3:'3 camere',4:'4+ camere'}[p.apartment_type] || 'Apartament'
+      : {1:'Apartament',2:'Casă',3:'Teren',4:'Comercial',5:'Birou',6:'Depozit',7:'Hotel'}[p.property_type] || 'Proprietate';
+    const meta = [p.surface_useful&&p.surface_useful+' mp', p.rooms&&p.rooms+' cam.', p.floor!=null&&'et.'+p.floor].filter(Boolean).join(' · ');
+    const sel = selectedProp?.id === p.id ? 'selected' : '';
+    const propJson = encodeURIComponent(JSON.stringify(p));
+    return `<div class="prop-card ${sel}" id="card-${p.id}" onclick="selectProp(this, '${propJson}')">
+      <div class="prop-img">${img?`<img src="${img}" alt="" onerror="this.parentElement.innerHTML='📷 Fără imagine'">`:'📷 Fără imagine'}<div class="check">✓</div></div>
+      <div class="prop-info">
+        <div class="prop-type">${p.transaction_type===2?'Închiriere':'Vânzare'} · ${type}</div>
+        <div class="prop-title">${p.title||p.street||'Proprietate'}</div>
+        <div class="prop-price">${price}</div>
+        <div class="prop-meta">${meta}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderPagination(total) {
+  if (totalPages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+  document.getElementById('pagination').innerHTML = `
+    <button class="page-btn" onclick="loadProperties(${currentPage-1})" ${currentPage<=1?'disabled':''}>← Anterior</button>
+    <span class="page-info">Pagina ${currentPage} din ${totalPages}</span>
+    <button class="page-btn" onclick="loadProperties(${currentPage+1})" ${currentPage>=totalPages?'disabled':''}>Următor →</button>
+  `;
+}
+
+function selectProp(el, propJson) {
+  document.querySelectorAll('.prop-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedProp = JSON.parse(decodeURIComponent(propJson));
+  document.getElementById('generateBtn').disabled = false;
+  document.getElementById('selectedInfo').textContent = 'Selectat: ' + (selectedProp.title || selectedProp.street || '');
+  document.getElementById('postsSection').style.display = 'none';
+}
+
+async function generateAllPosts() {
+  if (!selectedProp) return;
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Se generează...';
+
+  document.getElementById('postsSection').style.display = 'block';
+  PLATFORMS.forEach(p => { document.getElementById('text-'+p).textContent = '⏳ Se generează...'; });
+  document.getElementById('postsSection').scrollIntoView({behavior:'smooth'});
+
+  await Promise.all(PLATFORMS.map(platform => generatePost(platform)));
+
+  btn.disabled = false;
+  btn.innerHTML = '✦ Regenerează Postări';
+}
+
+async function generatePost(platform) {
+  const el = document.getElementById('text-'+platform);
+  el.textContent = '';
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ property: selectedProp, platform })
+    });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      for (const line of decoder.decode(value).split('\n').filter(l => l.startsWith('data: '))) {
+        try {
+          const json = JSON.parse(line.slice(6));
+          if (json.text) el.textContent += json.text;
+          if (json.error) el.textContent = '⚠️ ' + json.error;
+        } catch {}
+      }
+    }
+  } catch(e) {
+    el.textContent = '⚠️ Eroare: ' + e.message;
+  }
+}
+
+function showTab(id) {
+  PLATFORMS.forEach(p => {
+    document.getElementById('box-'+p).classList.remove('visible');
+    const t = document.getElementById('tab-'+p);
+    t.style.background = 'transparent';
+    t.style.color = '#7a7060';
+    t.style.borderColor = '#2e2b25';
+  });
+  document.getElementById('box-'+id).classList.add('visible');
+  const t = document.getElementById('tab-'+id);
+  t.style.background = TAB_COLORS[id];
+  t.style.color = '#fff';
+  t.style.borderColor = 'transparent';
+}
+
+async function copyPost(id, btn) {
+  await navigator.clipboard.writeText(document.getElementById('text-'+id).textContent);
+  btn.textContent = '✓ Copiat!';
+  btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = '📋 Copiează'; btn.classList.remove('copied'); }, 2000);
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+</script>
+</body>
+</html>
