@@ -29,7 +29,6 @@ function buildSummary(p) {
     `Suprafață: ${p.surface_useful || p.surface_built || "N/A"} mp`,
     `Camere: ${p.rooms || "N/A"}`,
     `Etaj: ${p.floor != null ? p.floor : "N/A"}`,
-    `Stradă: ${p.street || "N/A"}`,
     `An construcție: ${p.construction_year || "N/A"}`,
     `Descriere: ${p.description ? p.description.substring(0, 600) : "N/A"}`,
   ].join("\n");
