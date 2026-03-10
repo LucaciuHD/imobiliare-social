@@ -94,6 +94,8 @@ app.post("/api/generate", async (req, res) => {
     }
 
     const reader = response.body;
+    const CONTACT_FOOTER = "\n\n---\n📞 0775 129 022\n🏢 SIMPLU Imobiliare Craiova\n🌐 SIMPLUIMOBILIARE.COM";
+    let messageStopped = false;
     reader.on("data", (chunk) => {
       const lines = chunk.toString().split("\n").filter(l => l.startsWith("data: "));
       for (const line of lines) {
@@ -102,7 +104,9 @@ app.post("/api/generate", async (req, res) => {
           if (json.type === "content_block_delta" && json.delta?.text) {
             res.write(`data: ${JSON.stringify({ text: json.delta.text })}\n\n`);
           }
-          if (json.type === "message_stop") {
+          if (json.type === "message_stop" && !messageStopped) {
+            messageStopped = true;
+            res.write(`data: ${JSON.stringify({ text: CONTACT_FOOTER })}\n\n`);
             res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
           }
         } catch {}
