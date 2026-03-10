@@ -45,7 +45,7 @@ app.get("/api/properties", async (req, res) => {
   try {
     const page = req.query.page || 1;
     const search = req.query.search || "";
-    let url = `${CRM_BASE}/properties/?ordering=-created_at&limit=20&page=${page}&token=${CRM_TOKEN}`;
+    let url = `${CRM_BASE}/properties/?ordering=-created_at&limit=20&page=${page}&availability=1&token=${CRM_TOKEN}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     const response = await fetch(url, { headers: { "Accept": "application/json" } });
     if (!response.ok) throw new Error(`CRM error: ${response.status}`);
