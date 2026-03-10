@@ -35,10 +35,10 @@ function buildSummary(p) {
 }
 
 const PROMPTS = {
-  facebook: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie o postare Facebook profesională, caldă și convingătoare. Include emoji-uri relevante și detaliile cheie. Termină postarea cu exact: "Totul este mai SIMPLU cu noi! 😊". NU include număr de telefon sau date de contact. Max 300 cuvinte.\n\nProprietate:\n${info}`,
-  instagram: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie o postare Instagram captivantă cu emoji-uri și minim 15 hashtag-uri română+engleză. Termină textul (înainte de hashtag-uri) cu exact: "Totul este mai SIMPLU cu noi! 😊". NU include număr de telefon sau date de contact. Max 200 cuvinte.\n\nProprietate:\n${info}`,
-  tiktok: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie un script TikTok scurt și energic cu hook puternic. Termină cu exact: "Totul este mai SIMPLU cu noi! 😊". NU include număr de telefon sau date de contact. Max 150 cuvinte + hashtag-uri.\n\nProprietate:\n${info}`,
-  whatsapp: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie un mesaj WhatsApp concis și profesional. Termină cu exact: "Totul este mai SIMPLU cu noi! 😊". NU include număr de telefon sau date de contact. Max 150 cuvinte.\n\nProprietate:\n${info}`,
+  facebook: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie o postare Facebook profesională, caldă și convingătoare. Include emoji-uri relevante și detaliile cheie. Termină postarea cu exact: "Totul este mai SIMPLU cu noi! 😊". NU include număr de telefon, date de contact sau cuvântul "showroom". Max 300 cuvinte.\n\nProprietate:\n${info}`,
+  instagram: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie o postare Instagram captivantă cu emoji-uri și minim 15 hashtag-uri română+engleză. Termină textul (înainte de hashtag-uri) cu exact: "Totul este mai SIMPLU cu noi! 😊". NU include număr de telefon, date de contact sau cuvântul "showroom". Max 200 cuvinte.\n\nProprietate:\n${info}`,
+  tiktok: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie un script TikTok scurt și energic cu hook puternic. Termină cu exact: "Totul este mai SIMPLU cu noi! 😊". NU include număr de telefon, date de contact sau cuvântul "showroom". Max 150 cuvinte + hashtag-uri.\n\nProprietate:\n${info}`,
+  whatsapp: (info) => `Ești agent imobiliar profesionist la SIMPLU Imobiliare Craiova. Scrie un mesaj WhatsApp concis și profesional. Termină cu exact: "Totul este mai SIMPLU cu noi! 😊". NU include număr de telefon, date de contact sau cuvântul "showroom". Max 150 cuvinte.\n\nProprietate:\n${info}`,
 };
 
 // GET properties from CRM
@@ -93,7 +93,7 @@ app.post("/api/generate", async (req, res) => {
     }
 
     const reader = response.body;
-    const CONTACT_FOOTER = "\n\n---\n📞 0775 129 022\n🏢 SIMPLU Imobiliare Craiova\n🌐 SIMPLUIMOBILIARE.COM";
+    const CONTACT_FOOTER = "\n\n---\n📞 0775 129 022\n🏢 SIMPLU Imobiliare Craiova\n📍 Craiova, Str. Dimitrie Bolintineanu Nr.14\n🌐 SIMPLUIMOBILIARE.COM";
     let messageStopped = false;
     reader.on("data", (chunk) => {
       const lines = chunk.toString().split("\n").filter(l => l.startsWith("data: "));
