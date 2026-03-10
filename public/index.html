@@ -178,7 +178,7 @@ function renderProps(props, total) {
     return `<div class="prop-card ${sel}" id="card-${p.id}" onclick="selectProp(this, '${propJson}')">
       <div class="prop-img" id="img-${p.id}">📷 Se încarcă...<div class="check">✓</div></div>
       <div class="prop-info">
-        <div class="prop-type">${p.transaction_type===2?'Închiriere':'Vânzare'} · ${type}</div>
+        <div class="prop-type">${p.transaction_type===2?'Închiriere':'Vânzare'} · ${type} · <span style="color:#c9a84c;font-weight:600">${p.display_id||'CP'+p.id}</span></div>
         <div class="prop-title">${p.title||p.street||'Proprietate'}</div>
         <div class="prop-price">${price}</div>
         <div class="prop-meta">${meta}</div>
