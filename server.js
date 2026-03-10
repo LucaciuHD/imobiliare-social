@@ -52,19 +52,19 @@ app.get("/api/properties", async (req, res) => {
     if (!response.ok) throw new Error(`CRM error: ${response.status}`);
     const data = await response.json();
 
-    // Fetch images for each property in parallel
-    if (data.results && data.results.length) {
-      await Promise.all(data.results.map(async (prop) => {
-        try {
-          const imgRes = await fetch(`${CRM_BASE}/properties/${prop.id}/images/?token=${CRM_TOKEN}`, { headers: { "Accept": "application/json" } });
-          if (imgRes.ok) {
-            const imgData = await imgRes.json();
-            prop.images = Array.isArray(imgData) ? imgData : (imgData.results || []);
-          }
-        } catch {}
-      }));
-    }
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
+// GET images for a property
+app.get("/api/properties/:id/images", async (req, res) => {
+  try {
+    const url = `${CRM_BASE}/properties/${req.params.id}/images/?token=${CRM_TOKEN}`;
+    const response = await fetch(url, { headers: { "Accept": "application/json" } });
+    if (!response.ok) throw new Error(`CRM error: ${response.status}`);
+    const data = await response.json();
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
