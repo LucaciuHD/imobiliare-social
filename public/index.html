@@ -250,6 +250,18 @@
   @keyframes spin { to{transform:rotate(360deg)} }
   #propertiesSection { display:none; }
   #postsSection { display:none; }
+  .publish-btn {
+    background:linear-gradient(135deg,#c9a84c,#e8c97a,#c9a84c);
+    background-size:200% 200%;
+    color:#09080a; border:none; border-radius:8px;
+    padding:7px 16px; font-size:12px; font-family:'DM Sans',sans-serif;
+    cursor:pointer; font-weight:600; transition:all 0.3s;
+  }
+  .publish-btn:hover:not(:disabled) { background-position:right center; box-shadow:0 4px 16px rgba(201,168,76,0.3); }
+  .publish-btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .publish-status { margin-top:12px; font-size:13px; padding:8px 14px; border-radius:8px; display:none; }
+  .publish-status.success { background:rgba(46,204,113,0.08); border:1px solid rgba(46,204,113,0.2); color:#2ecc71; display:block; }
+  .publish-status.error { background:rgba(255,85,85,0.06); border:1px solid rgba(255,85,85,0.2); color:#ff8080; display:block; }
 </style>
 </head>
 <body>
@@ -307,12 +319,32 @@
       <button class="tab-btn" id="tab-whatsapp" onclick="showTab('whatsapp')">💬 WhatsApp</button>
     </div>
     <div class="post-box visible" id="box-facebook">
-      <div class="post-box-header"><span class="post-platform-label">📘 Facebook</span><button class="copy-btn" onclick="copyPost('facebook',this)">📋 Copiază</button></div>
+      <div class="post-box-header">
+        <span class="post-platform-label">📘 Facebook</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:12px;color:#b0a898;cursor:pointer;display:flex;align-items:center;gap:4px">
+            <input type="checkbox" id="overlay-toggle-facebook" checked style="cursor:pointer"> 🏷️ Etichete poze
+          </label>
+          <button class="copy-btn" onclick="copyPost('facebook',this)">📋 Copiază</button>
+          <button class="publish-btn" id="pub-facebook" onclick="publishPost('facebook',this)">🚀 Publică pe Facebook</button>
+        </div>
+      </div>
       <div class="post-text" id="text-facebook"></div>
+      <div class="publish-status" id="status-facebook"></div>
     </div>
     <div class="post-box" id="box-instagram">
-      <div class="post-box-header"><span class="post-platform-label">📸 Instagram</span><button class="copy-btn" onclick="copyPost('instagram',this)">📋 Copiază</button></div>
+      <div class="post-box-header">
+        <span class="post-platform-label">📸 Instagram</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:12px;color:#b0a898;cursor:pointer;display:flex;align-items:center;gap:4px">
+            <input type="checkbox" id="overlay-toggle-instagram" checked style="cursor:pointer"> 🏷️ Etichete poze
+          </label>
+          <button class="copy-btn" onclick="copyPost('instagram',this)">📋 Copiază</button>
+          <button class="publish-btn" id="pub-instagram" onclick="publishPost('instagram',this)">🚀 Publică pe Instagram</button>
+        </div>
+      </div>
       <div class="post-text" id="text-instagram"></div>
+      <div class="publish-status" id="status-instagram"></div>
     </div>
     <div class="post-box" id="box-tiktok">
       <div class="post-box-header"><span class="post-platform-label">🎵 TikTok</span><button class="copy-btn" onclick="copyPost('tiktok',this)">📋 Copiază</button></div>
@@ -502,6 +534,68 @@ function showError(msg) {
   const el = document.getElementById('errorMsg');
   el.textContent = '⚠️ ' + msg;
   el.style.display = 'block';
+}
+
+async function publishPost(platform, btn) {
+  const text = document.getElementById('text-' + platform).textContent;
+  const statusEl = document.getElementById('status-' + platform);
+  if (!text || text.startsWith('⏳') || text.startsWith('⚠️')) return;
+
+  btn.disabled = true;
+  statusEl.className = 'publish-status';
+
+  // Get up to 6 images from CRM (already have watermark)
+  let imageUrls = [];
+  if (selectedProp) {
+    try {
+      const imgRes = await fetch(`/api/properties/${selectedProp.id}/images`);
+      const images = await imgRes.json();
+      const list = Array.isArray(images) ? images : (images?.results || []);
+      imageUrls = list.slice(0, 6).map(img => img.url).filter(Boolean);
+    } catch {}
+  }
+  const originalImageUrls = [...imageUrls]; // URL-uri CRM publice, fallback pentru Instagram
+
+  // Apply yellow text overlays if toggle is checked
+  let batchId = null;
+  const useOverlays = document.getElementById('overlay-toggle-' + platform)?.checked !== false;
+  if (imageUrls.length > 0 && useOverlays) {
+    btn.textContent = '🎨 Se procesează pozele...';
+    statusEl.textContent = '🎨 Se adaugă etichete pe poze...';
+    try {
+      const ovRes = await fetch('/api/overlay-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrls, property: selectedProp })
+      });
+      const ovData = await ovRes.json();
+      if (ovData.overlayUrls) {
+        imageUrls = ovData.overlayUrls;
+        batchId = ovData.batchId;
+      }
+    } catch {}
+  }
+
+  btn.textContent = '⏳ Se publică...';
+  try {
+    const res = await fetch(`/api/publish/${platform}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, imageUrls, batchId, fallbackUrls: originalImageUrls })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const photoCount = imageUrls.length > 0 ? ` (${imageUrls.length} poze)` : '';
+    statusEl.textContent = '✅ Publicat cu succes' + photoCount + '! ID: ' + data.id;
+    statusEl.className = 'publish-status success';
+    btn.textContent = '✅ Publicat!';
+    setTimeout(() => { btn.textContent = '🚀 Publică pe ' + (platform === 'facebook' ? 'Facebook' : 'Instagram'); btn.disabled = false; }, 3000);
+  } catch(e) {
+    statusEl.textContent = '❌ Eroare: ' + e.message;
+    statusEl.className = 'publish-status error';
+    btn.textContent = '🚀 Publică pe ' + (platform === 'facebook' ? 'Facebook' : 'Instagram');
+    btn.disabled = false;
+  }
 }
 </script>
 </body>

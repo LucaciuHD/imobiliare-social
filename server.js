@@ -2,14 +2,78 @@ const express = require("express");
 const fetch = require("node-fetch");
 const cors = require("cors");
 const path = require("path");
+const os = require("os");
+const fs = require("fs");
+const crypto = require("crypto");
+const { generateHighlights, applyOverlayToImage } = require("./imageOverlay");
+const FormData = require("form-data");
+
+const OVERLAY_DIR = process.platform === "win32"
+  ? path.join(os.tmpdir(), "overlays")
+  : "/tmp/overlays";
+
+fs.mkdirSync(OVERLAY_DIR, { recursive: true });
+
+// Cleanup overlay files older than 1 hour on startup
+try {
+  const cutoff = Date.now() - 3600000;
+  fs.readdirSync(OVERLAY_DIR).forEach(f => {
+    const fp = path.join(OVERLAY_DIR, f);
+    try { if (fs.statSync(fp).mtimeMs < cutoff) fs.unlinkSync(fp); } catch {}
+  });
+} catch {}
+
+function cleanupBatch(batchId) {
+  if (!batchId) return;
+  try {
+    fs.readdirSync(OVERLAY_DIR)
+      .filter(f => f.startsWith(batchId))
+      .forEach(f => { try { fs.unlinkSync(path.join(OVERLAY_DIR, f)); } catch {} });
+  } catch {}
+}
+
+// Upload photo to Facebook — binary upload (works from localhost too)
+async function uploadFBPhoto(imgUrl, pageId, pageToken, options = {}) {
+  const { published = false, caption } = options;
+  const localFile = imgUrl.includes("/overlays/")
+    ? path.join(OVERLAY_DIR, imgUrl.split("/overlays/").pop())
+    : null;
+
+  if (localFile && fs.existsSync(localFile)) {
+    const form = new FormData();
+    form.append("source", fs.createReadStream(localFile), { filename: "photo.jpg", contentType: "image/jpeg" });
+    form.append("published", String(published));
+    if (caption) form.append("caption", caption);
+    form.append("access_token", pageToken);
+    const r = await fetch(`https://graph.facebook.com/v18.0/${pageId}/photos`, {
+      method: "POST",
+      body: form,
+      headers: form.getHeaders(),
+    });
+    return r.json();
+  }
+
+  // Remote URL (CRM images or Railway public URLs)
+  const r = await fetch(`https://graph.facebook.com/v18.0/${pageId}/photos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: imgUrl, published, caption, access_token: pageToken }),
+  });
+  return r.json();
+}
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use("/overlays", express.static(OVERLAY_DIR));
 
-const CRM_TOKEN = process.env.CRM_TOKEN || "8b5b5946671da2a80fc41481760673ab2868ba99";
-const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY || "";
+const CRM_TOKEN = process.env.CRM_TOKEN;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY;
 const CRM_BASE = "https://simpluimobiliare.crmrebs.com/api";
+
+const FB_PAGE_TOKEN = process.env.FB_PAGE_TOKEN;
+const FB_PAGE_ID = process.env.FB_PAGE_ID;
+const IG_ACCOUNT_ID = process.env.IG_ACCOUNT_ID;
 
 const PROP_TYPES = {1:"Apartament",2:"Casă",3:"Teren",4:"Spațiu comercial",5:"Birou",6:"Depozit",7:"Hotel"};
 const APT_TYPES = {1:"Garsonieră",2:"2 camere",3:"3 camere",4:"4+ camere"};
@@ -134,6 +198,144 @@ app.post("/api/generate", async (req, res) => {
   } catch (e) {
     res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
     res.end();
+  }
+});
+
+// POST process images with yellow text overlays
+app.post("/api/overlay-images", async (req, res) => {
+  const { imageUrls, property } = req.body;
+  if (!imageUrls || imageUrls.length === 0) return res.status(400).json({ error: "Lipsesc imaginile" });
+  try {
+    const highlights = await generateHighlights(property || {}, imageUrls.length, ANTHROPIC_KEY);
+    const batchId = crypto.randomUUID();
+    await Promise.all(imageUrls.map((url, i) =>
+      applyOverlayToImage(url, highlights[i] || "SIMPLU Imobiliare", path.join(OVERLAY_DIR, `${batchId}_${i}.jpg`))
+    ));
+    const baseUrl = req.protocol + "://" + req.get("host");
+    const overlayUrls = imageUrls.map((_, i) => `${baseUrl}/overlays/${batchId}_${i}.jpg`);
+    res.json({ overlayUrls, batchId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST publish to Facebook (multi-photo)
+app.post("/api/publish/facebook", async (req, res) => {
+  const { message, imageUrls, batchId } = req.body;
+  if (!message) return res.status(400).json({ error: "Lipsește mesajul" });
+  try {
+    const photos = imageUrls && imageUrls.length > 0 ? imageUrls.slice(0, 6) : [];
+
+    if (photos.length > 1) {
+      // Upload photos as unpublished, then attach to post
+      const photoIds = [];
+      for (const imgUrl of photos) {
+        const d = await uploadFBPhoto(imgUrl, FB_PAGE_ID, FB_PAGE_TOKEN, { published: false });
+        if (d.id) photoIds.push({ media_fbid: d.id });
+      }
+      const postRes = await fetch(`https://graph.facebook.com/v18.0/${FB_PAGE_ID}/feed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, attached_media: photoIds, access_token: FB_PAGE_TOKEN }),
+      });
+      const postData = await postRes.json();
+      if (postData.error) return res.status(400).json({ error: postData.error.message });
+      cleanupBatch(batchId);
+      res.json({ success: true, id: postData.id });
+    } else if (photos.length === 1) {
+      const d = await uploadFBPhoto(photos[0], FB_PAGE_ID, FB_PAGE_TOKEN, { published: true, caption: message });
+      if (d.error) return res.status(400).json({ error: d.error.message });
+      cleanupBatch(batchId);
+      res.json({ success: true, id: d.id });
+    } else {
+      const r = await fetch(`https://graph.facebook.com/v18.0/${FB_PAGE_ID}/feed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, access_token: FB_PAGE_TOKEN }),
+      });
+      const d = await r.json();
+      if (d.error) return res.status(400).json({ error: d.error.message });
+      res.json({ success: true, id: d.id });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST publish to Instagram (carousel cu max 10 poze)
+app.post("/api/publish/instagram", async (req, res) => {
+  const { message, imageUrls, batchId, fallbackUrls } = req.body;
+  if (!message || !imageUrls || imageUrls.length === 0) {
+    return res.status(400).json({ error: "Instagram necesită mesaj și cel puțin o imagine" });
+  }
+  try {
+    // Instagram API needs public URLs — use fallback CRM URLs if overlays are on localhost
+    const isLocalhost = imageUrls[0] && (imageUrls[0].includes("localhost") || imageUrls[0].includes("127.0.0.1"));
+    const resolvedUrls = isLocalhost && fallbackUrls && fallbackUrls.length > 0 ? fallbackUrls : imageUrls;
+    const photos = resolvedUrls.slice(0, 10);
+
+    if (photos.length === 1) {
+      // Single image post
+      const containerRes = await fetch(`https://graph.facebook.com/v18.0/${IG_ACCOUNT_ID}/media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_url: photos[0], caption: message, access_token: FB_PAGE_TOKEN }),
+      });
+      const container = await containerRes.json();
+      if (container.error) return res.status(400).json({ error: container.error.message });
+      const publishRes = await fetch(`https://graph.facebook.com/v18.0/${IG_ACCOUNT_ID}/media_publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creation_id: container.id, access_token: FB_PAGE_TOKEN }),
+      });
+      const published = await publishRes.json();
+      if (published.error) return res.status(400).json({ error: published.error.message });
+      cleanupBatch(batchId);
+      res.json({ success: true, id: published.id });
+    } else {
+      // Carousel post
+      const childIds = [];
+      for (const imgUrl of photos) {
+        const r = await fetch(`https://graph.facebook.com/v18.0/${IG_ACCOUNT_ID}/media`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image_url: imgUrl, is_carousel_item: true, access_token: FB_PAGE_TOKEN }),
+        });
+        const d = await r.json();
+        if (d.id) childIds.push(d.id);
+      }
+      const carouselRes = await fetch(`https://graph.facebook.com/v18.0/${IG_ACCOUNT_ID}/media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ media_type: "CAROUSEL", children: childIds.join(","), caption: message, access_token: FB_PAGE_TOKEN }),
+      });
+      const carousel = await carouselRes.json();
+      if (carousel.error) return res.status(400).json({ error: carousel.error.message });
+      const publishRes = await fetch(`https://graph.facebook.com/v18.0/${IG_ACCOUNT_ID}/media_publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creation_id: carousel.id, access_token: FB_PAGE_TOKEN }),
+      });
+      const published = await publishRes.json();
+      if (published.error) return res.status(400).json({ error: published.error.message });
+      cleanupBatch(batchId);
+      res.json({ success: true, id: published.id });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET Facebook page analytics
+app.get("/api/analytics/facebook", async (req, res) => {
+  try {
+    const url = `https://graph.facebook.com/v18.0/${FB_PAGE_ID}/insights?metric=page_impressions,page_reach,page_post_engagements,page_fan_adds&period=day&access_token=${FB_PAGE_TOKEN}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data.error) return res.status(400).json({ error: data.error.message });
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
