@@ -1,8 +1,45 @@
 const fetch = require("node-fetch");
 const sharp = require("sharp");
+const path = require("path");
+const { createCanvas, GlobalFonts } = require("@napi-rs/canvas");
 
 const LOGO_URL = "https://media.crmrebs.com/agencies/simpluimobiliare/logo/df1af06e-4181-4a4f-bded-cae60a80194c/Logo_Simplu_Imobiliare-01.png";
 let _logoBuffer = null;
+
+// On Linux (Railway) Arial doesn't exist — register NotoSans from bundled font file
+if (process.platform !== "win32") {
+  try {
+    GlobalFonts.registerFromPath(path.join(__dirname, "fonts", "NotoSans-Bold.ttf"), "Arial");
+  } catch (e) {
+    console.error("Font register failed:", e.message);
+  }
+}
+
+function createLabelPng(text, pw, ph, fontSize, rx) {
+  const canvas = createCanvas(pw, ph);
+  const ctx = canvas.getContext("2d");
+  // Yellow rounded rect (manual path for compatibility)
+  ctx.fillStyle = "#FFD700";
+  ctx.beginPath();
+  ctx.moveTo(rx, 0);
+  ctx.lineTo(pw - rx, 0);
+  ctx.quadraticCurveTo(pw, 0, pw, rx);
+  ctx.lineTo(pw, ph - rx);
+  ctx.quadraticCurveTo(pw, ph, pw - rx, ph);
+  ctx.lineTo(rx, ph);
+  ctx.quadraticCurveTo(0, ph, 0, ph - rx);
+  ctx.lineTo(0, rx);
+  ctx.quadraticCurveTo(0, 0, rx, 0);
+  ctx.closePath();
+  ctx.fill();
+  // Black bold text centered
+  ctx.fillStyle = "#111111";
+  ctx.font = `bold ${fontSize}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, pw / 2, ph / 2 + 1);
+  return canvas.toBuffer("image/png");
+}
 
 async function getLogoBuffer() {
   if (_logoBuffer) return _logoBuffer;
@@ -15,14 +52,6 @@ async function getLogoBuffer() {
   return _logoBuffer;
 }
 
-function escapeXml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
 
 async function applyOverlayToImage(imageUrl, text, outputPath) {
   const response = await fetch(imageUrl);
@@ -46,15 +75,12 @@ async function applyOverlayToImage(imageUrl, text, outputPath) {
   const len = text.length;
   const rawPw = len * charPx + padding;
   const pw = Math.min(rawPw, w - px * 2);
-  const cx = px + pw / 2;
-  const cy = py + ph / 2 + Math.round(1 * scale);
 
-  const svg = `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
-  <rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${rx}" ry="${rx}" fill="#FFD700"/>
-  <text x="${cx}" y="${cy}" font-family="Arial,Helvetica,sans-serif" font-size="${fontSize}" font-weight="bold" fill="#111111" text-anchor="middle" dominant-baseline="middle">${escapeXml(text)}</text>
-</svg>`;
+  console.log(`[overlay] text="${text}" w=${w} h=${h} scale=${scale} fontSize=${fontSize} pw=${pw} ph=${ph} rx=${rx}`);
 
-  const composites = [{ input: Buffer.from(svg), top: 0, left: 0 }];
+  // Render label (yellow pill + text) via canvas — works cross-platform
+  const labelPng = createLabelPng(text, pw, ph, fontSize, rx);
+  const composites = [{ input: labelPng, top: py, left: px }];
 
   // Logo watermark — bottom-right corner
   const logoBuffer = await getLogoBuffer();
