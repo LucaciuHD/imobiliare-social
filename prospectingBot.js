@@ -57,12 +57,12 @@ async function fetchAllPages(path) {
 
 // Proprietăți active de vânzare în Craiova (toate sursele)
 async function fetchActiveProperties() {
-  return fetchAllPages("/properties/?availability=1&for_sale=true&limit=100");
+  return fetchAllPages("/properties/?availability=1&limit=100");
 }
 
 // Anunțuri particulari active
 async function fetchParticularProperties() {
-  return fetchAllPages("/properties/?availability=1&for_sale=true&source=particular&limit=100");
+  return fetchAllPages("/properties/?availability=1&source=particular&limit=100");
 }
 
 // Cereri cumpărători active
