@@ -1,45 +1,62 @@
 const fetch = require("node-fetch");
 const sharp = require("sharp");
 const path = require("path");
-const { createCanvas, GlobalFonts } = require("@napi-rs/canvas");
+const opentype = require("opentype.js");
 
 const LOGO_URL = "https://media.crmrebs.com/agencies/simpluimobiliare/logo/df1af06e-4181-4a4f-bded-cae60a80194c/Logo_Simplu_Imobiliare-01.png";
 let _logoBuffer = null;
 
-// Register bundled font under unique name — works on both Windows and Linux
-const _fontPath = path.join(__dirname, "fonts", "NotoSans-Bold.ttf");
+// Load font once at startup — opentype.js reads TTF directly, no system font needed
+let _font = null;
 try {
-  const registered = GlobalFonts.registerFromPath(_fontPath, "SimpluFont");
-  console.log(`[font] register result: ${registered}, path: ${_fontPath}`);
-  console.log(`[font] families: ${JSON.stringify(GlobalFonts.families)}`);
+  _font = opentype.loadSync(path.join(__dirname, "fonts", "NotoSans-Bold.ttf"));
+  console.log("[font] NotoSans-Bold loaded OK via opentype.js");
 } catch (e) {
-  console.error("[font] Font register failed:", e.message);
+  console.error("[font] Failed to load font:", e.message);
 }
 
-function createLabelPng(text, pw, ph, fontSize, rx) {
-  const canvas = createCanvas(pw, ph);
-  const ctx = canvas.getContext("2d");
-  // Yellow rounded rect (manual path for compatibility)
-  ctx.fillStyle = "#FFD700";
-  ctx.beginPath();
-  ctx.moveTo(rx, 0);
-  ctx.lineTo(pw - rx, 0);
-  ctx.quadraticCurveTo(pw, 0, pw, rx);
-  ctx.lineTo(pw, ph - rx);
-  ctx.quadraticCurveTo(pw, ph, pw - rx, ph);
-  ctx.lineTo(rx, ph);
-  ctx.quadraticCurveTo(0, ph, 0, ph - rx);
-  ctx.lineTo(0, rx);
-  ctx.quadraticCurveTo(0, 0, rx, 0);
-  ctx.closePath();
-  ctx.fill();
-  // Black bold text centered
-  ctx.fillStyle = "#111111";
-  ctx.font = `${fontSize}px SimpluFont`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, pw / 2, ph / 2 + 1);
-  return canvas.toBuffer("image/png");
+function escapeXml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function createLabelSvg(text, pw, ph, fontSize, rx) {
+  // Rounded rect path (SVG native)
+  const rectPath = `M${rx},0 L${pw - rx},0 Q${pw},0 ${pw},${rx} L${pw},${ph - rx} Q${pw},${ph} ${pw - rx},${ph} L${rx},${ph} Q0,${ph} 0,${ph - rx} L0,${rx} Q0,0 ${rx},0 Z`;
+
+  if (!_font) {
+    // Fallback: SVG text (may show squares on some systems, but better than nothing)
+    return Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${pw}" height="${ph}">` +
+      `<path d="${rectPath}" fill="#FFD700"/>` +
+      `<text x="${pw / 2}" y="${ph / 2 + fontSize * 0.35}" text-anchor="middle" font-size="${fontSize}" font-weight="bold" fill="#111111">${escapeXml(text)}</text>` +
+      `</svg>`
+    );
+  }
+
+  // Convert text to SVG paths via opentype.js — zero system font dependency
+  const pathAtOrigin = _font.getPath(text, 0, 0, fontSize);
+  const bb = pathAtOrigin.getBoundingBox();
+  const textW = bb.x2 - bb.x1;
+  const cx = pw / 2 - bb.x1 - textW / 2;
+  const cy = ph / 2 - (bb.y1 + bb.y2) / 2;
+  const finalPath = _font.getPath(text, cx, cy, fontSize);
+
+  const d = finalPath.commands.map(cmd => {
+    const f = v => v.toFixed(2);
+    if (cmd.type === "M") return `M${f(cmd.x)},${f(cmd.y)}`;
+    if (cmd.type === "L") return `L${f(cmd.x)},${f(cmd.y)}`;
+    if (cmd.type === "C") return `C${f(cmd.x1)},${f(cmd.y1)},${f(cmd.x2)},${f(cmd.y2)},${f(cmd.x)},${f(cmd.y)}`;
+    if (cmd.type === "Q") return `Q${f(cmd.x1)},${f(cmd.y1)},${f(cmd.x)},${f(cmd.y)}`;
+    if (cmd.type === "Z") return "Z";
+    return "";
+  }).join("");
+
+  return Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${pw}" height="${ph}">` +
+    `<path d="${rectPath}" fill="#FFD700"/>` +
+    `<path d="${d}" fill="#111111"/>` +
+    `</svg>`
+  );
 }
 
 async function getLogoBuffer() {
@@ -77,17 +94,15 @@ async function applyOverlayToImage(imageUrl, text, outputPath) {
   const rawPw = len * charPx + padding;
   const pw = Math.min(rawPw, w - px * 2);
 
-  console.log(`[overlay] text="${text}" w=${w} h=${h} scale=${scale} fontSize=${fontSize} pw=${pw} ph=${ph} rx=${rx}`);
-
-  // Render label (yellow pill + text) via canvas — works cross-platform
-  const labelPng = createLabelPng(text, pw, ph, fontSize, rx);
+  // Render label as SVG with text converted to paths (platform-independent)
+  const labelSvg = createLabelSvg(text, pw, ph, fontSize, rx);
+  const labelPng = await sharp(labelSvg).png().toBuffer();
   const composites = [{ input: labelPng, top: py, left: px }];
 
-  // Logo watermark — bottom-right corner
+  // Logo watermark — centered
   const logoBuffer = await getLogoBuffer();
   if (logoBuffer) {
     const logoW = Math.round(320 * scale);
-    const margin = Math.round(18 * scale);
     const resized = await sharp(logoBuffer)
       .resize({ width: logoW, fit: "inside" })
       .toBuffer({ resolveWithObject: true });
@@ -142,13 +157,10 @@ function buildPropertySummary(p) {
 
 function generateFallbackHighlights(property, count) {
   const highlights = [];
-  // Floor is always first — mandatory
   const floorText = formatFloor(property);
   if (floorText) highlights.push(floorText);
-  // Surface — mandatory, with correct format
   const surfaceText = formatSurface(property);
   if (surfaceText) highlights.push(surfaceText);
-  // Remaining details
   if (property.rooms) highlights.push(`${property.rooms} camere`);
   if (property.construction_year) highlights.push(`construit ${property.construction_year}`);
   if (property.price_sale) highlights.push(`${Number(property.price_sale).toLocaleString("ro-RO")} EUR`);
