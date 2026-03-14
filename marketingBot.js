@@ -231,95 +231,147 @@ async function generateMarketingImage(headline, category) {
   const W = 1080, H = 1080;
   const PAD = 72;
   const MAX_TEXT_W = W - PAD * 2;
+  const layout = _categoryIndex % 4; // 4 layout-uri distincte
 
-  // Alternăm între 2 stiluri: 0=foto+gradient negru, 1=foto+gradient galben
-  const layout = _categoryIndex % 2;
-  const useYellowAccent = layout === 0;
-
-  // Încearcă să obțin fotografie de fundal
   const photoBuf = await fetchBackgroundImage(category || "brand_bold");
-
   let bg;
   if (photoBuf) {
-    // Fotografie reală — o întunecăm cu un gradient overlay pentru lizibilitate
-    bg = await sharp(photoBuf)
-      .resize(W, H, { fit: "cover", position: "centre" })
-      .png()
-      .toBuffer();
+    bg = await sharp(photoBuf).resize(W, H, { fit: "cover", position: "centre" }).png().toBuffer();
   } else {
-    // Fallback: fundal negru solid
-    bg = await sharp({
-      create: { width: W, height: H, channels: 4, background: { r: 17, g: 17, b: 17, alpha: 1 } }
-    }).png().toBuffer();
+    bg = await sharp({ create: { width: W, height: H, channels: 4, background: { r: 17, g: 17, b: 17, alpha: 1 } } }).png().toBuffer();
   }
 
   const composites = [];
-
-  // Gradient overlay peste foto — face textul lizibil
-  // Sus mai transparent, jos opac (de unde e textul)
-  const gradientSvg = Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-      <defs>
-        <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#000000" stop-opacity="0.35"/>
-          <stop offset="40%" stop-color="#000000" stop-opacity="0.55"/>
-          <stop offset="100%" stop-color="#000000" stop-opacity="0.88"/>
-        </linearGradient>
-      </defs>
-      <rect width="${W}" height="${H}" fill="url(#grad)"/>
-    </svg>`
-  );
-  composites.push({ input: gradientSvg });
-
-  // Bara galbenă sus (brand accent)
-  const accentColor = useYellowAccent ? "#FFD700" : "#FFD700"; // întotdeauna galben
-  const textColor = "#FFFFFF";
-  const accentThick = 8;
-
   let svgParts = [];
 
-  // Bara accent sus
-  svgParts.push(`<rect x="0" y="0" width="${W}" height="${accentThick}" fill="${accentColor}"/>`);
+  // ─────────────────────────────────────────────────────────────
+  // LAYOUT 0 — "Cinema": gradient jos puternic, text mare jos-stânga, bara galbenă sus
+  // ─────────────────────────────────────────────────────────────
+  if (layout === 0) {
+    composites.push({ input: Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#000" stop-opacity="0.1"/>
+          <stop offset="45%" stop-color="#000" stop-opacity="0.5"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0.92"/>
+        </linearGradient></defs>
+        <rect width="${W}" height="${H}" fill="url(#g)"/>
+      </svg>`) });
 
-  // Text headline — mare, bold, alb, stânga jos
-  const textAreaTop = H * 0.42; // începe la mijlocul imaginii
-  const LINE_H = 175;
-  headline.forEach((line, i) => {
-    const fontSize = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 170, 70);
-    svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textAreaTop + i * LINE_H, fontSize, textColor));
-  });
+    svgParts.push(`<rect x="0" y="0" width="${W}" height="10" fill="#FFD700"/>`);
+    const textStart = H * 0.44;
+    headline.forEach((line, i) => {
+      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 172, 68);
+      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textStart + i * 178, fs, "#FFFFFF"));
+    });
+    svgParts.push(`<rect x="${PAD}" y="${H - 168}" width="100" height="6" fill="#FFD700"/>`);
+    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 120, fitFontSize("SIMPLU IMOBILIARE", 500, 44, 26), "#FFD700"));
+    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 72, fitFontSize("SIMPLUIMOBILIARE.COM", 420, 26, 16), "#aaaaaa"));
+  }
 
-  // Linie galbenă separator înainte de footer
-  svgParts.push(`<rect x="${PAD}" y="${H - 175}" width="120" height="5" fill="${accentColor}"/>`);
+  // ─────────────────────────────────────────────────────────────
+  // LAYOUT 1 — "Split": foto sus 55%, bandă galbenă jos 45%, text negru pe galben
+  // ─────────────────────────────────────────────────────────────
+  else if (layout === 1) {
+    const yBand = Math.round(H * 0.55);
+    composites.push({ input: Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+        <rect x="0" y="${yBand}" width="${W}" height="${H - yBand}" fill="#FFD700"/>
+      </svg>`) });
 
-  // "SIMPLU IMOBILIARE" jos stânga — galben
-  const tagSize = fitFontSize("SIMPLU IMOBILIARE", MAX_TEXT_W * 0.55, 46, 28);
-  svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 130, tagSize, accentColor));
+    // "SIMPLU IMOBILIARE" mic în colțul din stânga sus al benzii galbene
+    const brandSize = fitFontSize("SIMPLU IMOBILIARE", 340, 30, 18);
+    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, yBand + 36, brandSize, "#111111"));
 
-  // Website jos stânga
-  const siteSize = fitFontSize("SIMPLUIMOBILIARE.COM", MAX_TEXT_W * 0.45, 28, 18);
-  svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 80, siteSize, "#cccccc"));
+    // Linie subțire separator
+    svgParts.push(`<rect x="${PAD}" y="${yBand + 48}" width="${W - PAD * 2}" height="3" fill="rgba(0,0,0,0.2)"/>`);
 
-  const svgOverlay = Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
-    svgParts.join("") +
-    `</svg>`
-  );
-  composites.push({ input: svgOverlay });
+    // Headline mare — headline[0] și [1] în banda galbenă
+    const textStart = yBand + 100;
+    const lineH = Math.round((H - yBand - 130) / Math.max(headline.length, 1));
+    headline.forEach((line, i) => {
+      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 148, 56);
+      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textStart + i * lineH + fs * 0.82, fs, "#111111"));
+    });
+  }
 
-  // Logo PNG jos dreapta
+  // ─────────────────────────────────────────────────────────────
+  // LAYOUT 2 — "Bold Box": casetă neagră semitransparentă în mijloc cu text
+  // ─────────────────────────────────────────────────────────────
+  else if (layout === 2) {
+    composites.push({ input: Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#000" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0.7"/>
+        </linearGradient></defs>
+        <rect width="${W}" height="${H}" fill="url(#g)"/>
+      </svg>`) });
+
+    // Casetă neagră cu margini galbene
+    const boxX = PAD - 20, boxY = Math.round(H * 0.28);
+    const boxW = W - (PAD - 20) * 2;
+    const boxH = Math.round(H * 0.44);
+    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="rgba(0,0,0,0.75)" rx="4"/>`);
+    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="6" fill="#FFD700" rx="0"/>`);
+    svgParts.push(`<rect x="${boxX}" y="${boxY + boxH - 6}" width="${boxW}" height="6" fill="#FFD700" rx="0"/>`);
+
+    const textCenterY = boxY + boxH / 2;
+    const totalTextH = headline.length * 170;
+    headline.forEach((line, i) => {
+      const fs = fitFontSize(line.toUpperCase(), boxW - 60, 160, 62);
+      const y = textCenterY - totalTextH / 2 + i * 170 + fs * 0.72;
+      svgParts.push(makeTextPathLeft(line.toUpperCase(), boxX + 30, y, fs, "#FFFFFF"));
+    });
+
+    // Footer jos
+    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 110, fitFontSize("SIMPLU IMOBILIARE", 480, 42, 24), "#FFD700"));
+    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 62, fitFontSize("SIMPLUIMOBILIARE.COM", 380, 26, 16), "#aaaaaa"));
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // LAYOUT 3 — "Neon": gradient diagonal, text top + bara galbenă laterală
+  // ─────────────────────────────────────────────────────────────
+  else {
+    composites.push({ input: Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+        <defs><linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0%" stop-color="#000" stop-opacity="0.9"/>
+          <stop offset="55%" stop-color="#000" stop-opacity="0.5"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0.1"/>
+        </linearGradient></defs>
+        <rect width="${W}" height="${H}" fill="url(#g)"/>
+      </svg>`) });
+
+    // Bara galbenă verticală stânga
+    svgParts.push(`<rect x="0" y="0" width="12" height="${H}" fill="#FFD700"/>`);
+
+    const textStart = Math.round(H * 0.12);
+    const lineH = 180;
+    headline.forEach((line, i) => {
+      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W - 40, 175, 66);
+      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD + 20, textStart + i * lineH, fs, "#FFFFFF"));
+    });
+
+    // Linie + brand jos
+    svgParts.push(`<rect x="${PAD + 20}" y="${H - 178}" width="80" height="6" fill="#FFD700"/>`);
+    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD + 20, H - 120, fitFontSize("SIMPLU IMOBILIARE", 480, 44, 26), "#FFD700"));
+    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD + 20, H - 70, fitFontSize("SIMPLUIMOBILIARE.COM", 380, 26, 16), "#aaaaaa"));
+  }
+
+  composites.push({ input: Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` + svgParts.join("") + `</svg>`) });
+
+  // Logo PNG — cu fundal galben (#FFD700) ca în identitatea vizuală a firmei
   const logoBuffer = await getLogoBuffer();
   if (logoBuffer) {
     try {
       const resized = await sharp(logoBuffer)
-        .resize({ width: 200, fit: "inside" })
+        .flatten({ background: "#FFD700" })   // fundal galben, elemente negre
+        .resize({ width: 220, fit: "inside" })
         .png()
         .toBuffer({ resolveWithObject: true });
-      composites.push({
-        input: resized.data,
-        top: H - resized.info.height - 60,
-        left: W - resized.info.width - PAD,
-      });
+      composites.push({ input: resized.data, top: H - resized.info.height - 48, left: W - resized.info.width - PAD });
     } catch {}
   }
 
@@ -379,29 +431,45 @@ async function publishPost(postId) {
 }
 
 async function sendTelegramPreview(imagePath, post, postId) {
-  const caption = [
-    `📋 <b>PREVIZUALIZARE POSTARE</b>`,
-    `📂 Categorie: ${post.category}`,
-    `🏷 Headline: <i>${post.headline.join(" | ")}</i>`,
-    ``,
-    `<b>Facebook preview:</b>`,
-    post.facebook.substring(0, 400) + (post.facebook.length > 400 ? "..." : ""),
-  ].join("\n");
+  // 1. Trimite poza cu caption scurt (Telegram limitează caption la 1024 chars)
+  const shortCaption = `📋 <b>PREVIZUALIZARE</b> — ${post.category}\n🏷 <i>${post.headline.join(" | ")}</i>`;
+  const photoForm = new FormData();
+  photoForm.append("chat_id", String(ADMIN_CHAT_ID));
+  photoForm.append("photo", fs.createReadStream(imagePath), { filename: "preview.jpg", contentType: "image/jpeg" });
+  photoForm.append("caption", shortCaption);
+  photoForm.append("parse_mode", "HTML");
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+    method: "POST", body: photoForm, headers: photoForm.getHeaders(),
+  });
 
-  const form = new FormData();
-  form.append("chat_id", String(ADMIN_CHAT_ID));
-  form.append("photo", fs.createReadStream(imagePath), { filename: "preview.jpg", contentType: "image/jpeg" });
-  form.append("caption", caption.substring(0, 1024));
-  form.append("parse_mode", "HTML");
-  form.append("reply_markup", JSON.stringify({
-    inline_keyboard: [[
-      { text: "✅ Aprobă și publică", callback_data: `mkt_ok_${postId}` },
-      { text: "❌ Respinge", callback_data: `mkt_no_${postId}` },
-    ]]
-  }));
+  // 2. Trimite textul complet Facebook ca mesaj separat
+  const fbText = `<b>📘 TEXT FACEBOOK:</b>\n\n${post.facebook}`;
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: String(ADMIN_CHAT_ID),
+      text: fbText.substring(0, 4096),
+      parse_mode: "HTML",
+    }),
+  });
 
-  const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-    method: "POST", body: form, headers: form.getHeaders(),
+  // 3. Mesaj cu butoanele de aprobare (text Instagram + butoane)
+  const igText = `<b>📸 TEXT INSTAGRAM:</b>\n\n${post.instagram.substring(0, 800)}${post.instagram.length > 800 ? "..." : ""}`;
+  const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: String(ADMIN_CHAT_ID),
+      text: igText,
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [[
+          { text: "✅ Aprobă și publică", callback_data: `mkt_ok_${postId}` },
+          { text: "❌ Respinge / Regenerează", callback_data: `mkt_no_${postId}` },
+        ]]
+      },
+    }),
   });
   return r.json();
 }
