@@ -101,12 +101,26 @@ async function crmLogin() {
       redirect: "manual",
     });
 
-    const loginCookies = extractCookies(loginRes.headers);
-    const rawCookieHeader = loginRes.headers.get("set-cookie") || "";
-    console.log(`[prospecting] Set-Cookie header: ${rawCookieHeader.slice(0, 200)}`);
-    console.log(`[prospecting] Cookies extrase: ${JSON.stringify(loginCookies.map(c => c.split(";")[0]))}`);
-    const sessionid    = getCookieVal(loginCookies, "sessionid");
-    const newCsrf      = getCookieVal(loginCookies, "csrftoken") || csrfCookie;
+    let allCookies = extractCookies(loginRes.headers);
+    const location302 = loginRes.headers.get("location") || "";
+    console.log(`[prospecting] 302 Location: ${location302}, cookies: ${JSON.stringify(allCookies.map(c => c.split(";")[0]))}`);
+
+    // Urmărește redirect-ul manual dacă sessionid nu e în 302
+    if (location302 && !getCookieVal(allCookies, "sessionid")) {
+      const redirectUrl = location302.startsWith("http") ? location302 : `${CRM_WEB}${location302}`;
+      const cookieStr = [...(csrfCookie ? [`csrftoken=${csrfCookie}`] : []),
+                         ...allCookies.map(c => c.split(";")[0])].join("; ");
+      const redRes = await fetch(redirectUrl, {
+        headers: { "Cookie": cookieStr, "User-Agent": "Mozilla/5.0" },
+        redirect: "manual",
+      });
+      const redCookies = extractCookies(redRes.headers);
+      console.log(`[prospecting] Redirect ${redRes.status} cookies: ${JSON.stringify(redCookies.map(c => c.split(";")[0]))}`);
+      allCookies = [...allCookies, ...redCookies];
+    }
+
+    const sessionid    = getCookieVal(allCookies, "sessionid");
+    const newCsrf      = getCookieVal(allCookies, "csrftoken") || csrfCookie;
 
     console.log(`[prospecting] Login răspuns: status=${loginRes.status}, sessionid="${sessionid ? "ok" : "LIPSĂ"}"`);
 
