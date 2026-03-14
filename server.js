@@ -340,6 +340,23 @@ app.get("/api/analytics/facebook", async (req, res) => {
   }
 });
 
+// Debug: list all Facebook pages accessible with current token
+app.get("/api/fb-debug", async (req, res) => {
+  try {
+    const r = await fetch(`https://graph.facebook.com/v18.0/me/accounts?access_token=${FB_PAGE_TOKEN}`);
+    const data = await r.json();
+    if (data.error) return res.status(400).json({ error: data.error.message, hint: "Token invalid sau expirat" });
+    const pages = (data.data || []).map(p => ({ id: p.id, name: p.name, category: p.category, tasks: p.tasks }));
+    res.json({
+      current_FB_PAGE_ID: FB_PAGE_ID,
+      pages_found: pages,
+      hint: pages.length ? "Copiaza 'id'-ul paginii tale si pune-l in Railway ca FB_PAGE_ID" : "Nu s-a gasit nicio pagina — tokenul poate fi User token, nu Page token"
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Serve frontend
 app.use(express.static("public"));
 app.use(express.static("."));

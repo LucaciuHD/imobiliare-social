@@ -249,117 +249,133 @@ async function generateMarketingImage(headline, category) {
   // Textul footer stânga se limitează la jumătatea imaginii ca să nu colizioneze cu logo-ul
   const FOOTER_MAX_W = Math.round(W * 0.52);
 
+  // Helper: footer brand în jos-stânga (comun tuturor layouturilor cu fundal întunecat)
+  function addDarkFooter() {
+    svgParts.push(`<rect x="${PAD}" y="${H - 148}" width="70" height="5" fill="#FFD700"/>`);
+    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 104, fitFontSize("SIMPLU IMOBILIARE", FOOTER_MAX_W, 36, 22), "#FFFFFF"));
+    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 62, fitFontSize("SIMPLUIMOBILIARE.COM", FOOTER_MAX_W, 22, 14), "rgba(255,255,255,0.6)"));
+  }
+
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 0 — "Cinema": gradient jos, text mare centru-stânga, bara galbenă sus
+  // LAYOUT 0 — "Cinema": gradient puternic jos, text alb mare jos-stânga
   // ─────────────────────────────────────────────────────────────
   if (layout === 0) {
     composites.push({ input: Buffer.from(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
         <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#000" stop-opacity="0.1"/>
-          <stop offset="45%" stop-color="#000" stop-opacity="0.5"/>
-          <stop offset="100%" stop-color="#000" stop-opacity="0.92"/>
+          <stop offset="0%" stop-color="#000" stop-opacity="0"/>
+          <stop offset="40%" stop-color="#000" stop-opacity="0.15"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0.88"/>
         </linearGradient></defs>
         <rect width="${W}" height="${H}" fill="url(#g)"/>
       </svg>`) });
 
-    svgParts.push(`<rect x="0" y="0" width="${W}" height="10" fill="#FFD700"/>`);
-    const textStart = H * 0.42;
+    // Bara galbenă subțire sus — accent branding
+    svgParts.push(`<rect x="0" y="0" width="${W}" height="8" fill="#FFD700"/>`);
+
+    // Text centrat vertical în jumătatea inferioară
+    const textBase = Math.round(H * 0.72);
+    const lineSpacing = 170;
     headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 172, 68);
-      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textStart + i * 178, fs, "#FFFFFF"));
+      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 164, 64);
+      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textBase + i * lineSpacing, fs, "#FFFFFF"));
     });
-    // Footer stânga — lățime limitată să nu ajungă la logo
-    svgParts.push(`<rect x="${PAD}" y="${H - 162}" width="80" height="6" fill="#FFD700"/>`);
-    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 114, fitFontSize("SIMPLU IMOBILIARE", FOOTER_MAX_W, 40, 24), "#FFD700"));
-    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 68, fitFontSize("SIMPLUIMOBILIARE.COM", FOOTER_MAX_W, 24, 16), "#aaaaaa"));
+    addDarkFooter();
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 1 — "Split": foto sus 52%, bandă galbenă jos 48%
-  // Logo integrat în banda galbenă (nu separat) — fără suprapunere
+  // LAYOUT 1 — "Center Stage": gradient radial întunecat în centru,
+  // text centrat pe imagine, linie galbenă sub text
   // ─────────────────────────────────────────────────────────────
   else if (layout === 1) {
-    const yBand = Math.round(H * 0.52);
     composites.push({ input: Buffer.from(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-        <rect x="0" y="${yBand}" width="${W}" height="${H - yBand}" fill="#FFD700"/>
+        <defs>
+          <radialGradient id="rg" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stop-color="#000" stop-opacity="0.72"/>
+            <stop offset="100%" stop-color="#000" stop-opacity="0.08"/>
+          </radialGradient>
+        </defs>
+        <rect width="${W}" height="${H}" fill="url(#rg)"/>
       </svg>`) });
 
-    // Headline în banda galbenă, text negru, limitat la lățimea totală
-    const availH = H - yBand - 120; // lasă 120px sus pentru brand
-    const lineH = Math.round(availH / Math.max(headline.length, 1));
-    const textStart = yBand + 120;
+    // Text centrat pe imagine
+    const totalLines = headline.length;
+    const lineSpacing = 160;
+    const totalH = totalLines * lineSpacing;
+    const startY = Math.round(H / 2 - totalH / 2 + lineSpacing * 0.78);
     headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, Math.min(lineH - 10, 148), 48);
-      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textStart + i * lineH, fs, "#111111"));
+      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 148, 56);
+      svgParts.push(makeTextPath(line.toUpperCase(), W / 2, startY + i * lineSpacing, fs, "#FFFFFF"));
     });
-    // Brand mic sus în banda galbenă
-    svgParts.push(`<rect x="${PAD}" y="${yBand + 22}" width="60" height="5" fill="#111111"/>`);
-    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, yBand + 64, fitFontSize("SIMPLU IMOBILIARE", FOOTER_MAX_W, 32, 20), "#111111"));
-    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, yBand + 94, fitFontSize("SIMPLUIMOBILIARE.COM", FOOTER_MAX_W, 22, 14), "rgba(0,0,0,0.55)"));
+    // Linie galbenă sub ultimul rând
+    const lastTextY = startY + (totalLines - 1) * lineSpacing + 20;
+    const lineW = Math.min(
+      fitFontSize(headline[headline.length - 1].toUpperCase(), MAX_TEXT_W, 148, 56) * headline[headline.length - 1].length * 0.55,
+      MAX_TEXT_W
+    );
+    svgParts.push(`<rect x="${Math.round((W - lineW) / 2)}" y="${lastTextY}" width="${Math.round(lineW)}" height="6" fill="#FFD700"/>`);
+    addDarkFooter();
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 2 — "Bold Box": casetă neagră în mijloc cu text, logo jos-dreapta
+  // LAYOUT 2 — "Bold Box": casetă semi-transparentă cu borduri galbene, centrată
   // ─────────────────────────────────────────────────────────────
   else if (layout === 2) {
     composites.push({ input: Buffer.from(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
         <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#000" stop-opacity="0.25"/>
-          <stop offset="100%" stop-color="#000" stop-opacity="0.7"/>
+          <stop offset="0%" stop-color="#000" stop-opacity="0.2"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0.6"/>
         </linearGradient></defs>
         <rect width="${W}" height="${H}" fill="url(#g)"/>
       </svg>`) });
 
-    const boxX = PAD - 20, boxY = Math.round(H * 0.26);
-    const boxW = W - (PAD - 20) * 2;
-    const boxH = Math.round(H * 0.46);
-    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="rgba(0,0,0,0.78)" rx="4"/>`);
-    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="6" fill="#FFD700"/>`);
-    svgParts.push(`<rect x="${boxX}" y="${boxY + boxH - 6}" width="${boxW}" height="6" fill="#FFD700"/>`);
+    const boxPad = 48;
+    const boxX = PAD - 10;
+    const boxW = W - (PAD - 10) * 2;
+    const lineH = 158;
+    const textBlockH = headline.length * lineH;
+    const boxY = Math.round(H * 0.28);
+    const boxH = textBlockH + boxPad * 2;
 
-    const textCenterY = boxY + boxH / 2;
-    const totalTextH = headline.length * 168;
+    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="rgba(0,0,0,0.70)" rx="6"/>`);
+    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="7" fill="#FFD700" rx="3"/>`);
+    svgParts.push(`<rect x="${boxX}" y="${boxY + boxH - 7}" width="${boxW}" height="7" fill="#FFD700" rx="3"/>`);
+
+    const textStartY = boxY + boxPad + lineH * 0.78;
     headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), boxW - 80, 158, 58);
-      const y = textCenterY - totalTextH / 2 + i * 168 + fs * 0.72;
-      svgParts.push(makeTextPathLeft(line.toUpperCase(), boxX + 40, y, fs, "#FFFFFF"));
+      const fs = fitFontSize(line.toUpperCase(), boxW - 80, 148, 54);
+      svgParts.push(makeTextPathLeft(line.toUpperCase(), boxX + 40, textStartY + i * lineH, fs, "#FFFFFF"));
     });
-
-    // Footer stânga — limitat să nu atingă logo-ul
-    svgParts.push(`<rect x="${PAD}" y="${H - 152}" width="70" height="5" fill="#FFD700"/>`);
-    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 106, fitFontSize("SIMPLU IMOBILIARE", FOOTER_MAX_W, 40, 24), "#FFD700"));
-    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 62, fitFontSize("SIMPLUIMOBILIARE.COM", FOOTER_MAX_W, 24, 16), "#aaaaaa"));
+    addDarkFooter();
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 3 — "Neon": gradient diagonal, text sus, bara galbenă stânga
+  // LAYOUT 3 — "Side Impact": gradient stânga→dreapta, text sus-stânga,
+  // bara galbenă verticală stânga, foto vizibil în dreapta
   // ─────────────────────────────────────────────────────────────
   else {
     composites.push({ input: Buffer.from(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-        <defs><linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0%" stop-color="#000" stop-opacity="0.92"/>
-          <stop offset="60%" stop-color="#000" stop-opacity="0.55"/>
-          <stop offset="100%" stop-color="#000" stop-opacity="0.1"/>
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#000" stop-opacity="0.90"/>
+          <stop offset="55%" stop-color="#000" stop-opacity="0.55"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0.05"/>
         </linearGradient></defs>
         <rect width="${W}" height="${H}" fill="url(#g)"/>
       </svg>`) });
 
-    svgParts.push(`<rect x="0" y="0" width="12" height="${H}" fill="#FFD700"/>`);
-    const textStart = Math.round(H * 0.14);
-    const lineH = 180;
-    headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W - 40, 172, 64);
-      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD + 20, textStart + i * lineH, fs, "#FFFFFF"));
-    });
+    // Bara galbenă verticală stânga
+    svgParts.push(`<rect x="0" y="0" width="10" height="${H}" fill="#FFD700"/>`);
 
-    // Footer stânga — limitat
-    svgParts.push(`<rect x="${PAD + 20}" y="${H - 162}" width="70" height="6" fill="#FFD700"/>`);
-    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD + 20, H - 114, fitFontSize("SIMPLU IMOBILIARE", FOOTER_MAX_W, 40, 24), "#FFD700"));
-    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD + 20, H - 68, fitFontSize("SIMPLUIMOBILIARE.COM", FOOTER_MAX_W, 24, 16), "#aaaaaa"));
+    const textStartY = Math.round(H * 0.22);
+    const lineSpacing = 178;
+    headline.forEach((line, i) => {
+      const fs = fitFontSize(line.toUpperCase(), Math.round(W * 0.72), 164, 60);
+      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD + 14, textStartY + i * lineSpacing, fs, "#FFFFFF"));
+    });
+    addDarkFooter();
   }
 
   composites.push({ input: Buffer.from(
