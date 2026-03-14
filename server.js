@@ -416,19 +416,38 @@ app.get("/api/fb-debug", async (req, res) => {
 
 // ─── Dashboard API ────────────────────────────────────────────────────────────
 
-// GET market stats (live fetch from CRM)
+// GET market stats — returnează cache din prospectingBot (instant), fallback la CRM dacă nu e disponibil
 app.get("/api/dashboard/market", async (req, res) => {
+  // Cache disponibil (prospectingBot a rulat deja)
+  if (store.market) {
+    return res.json(store.market);
+  }
+  // Prima deschidere după deploy — fetch rapid (primele 3 pagini = ~300 proprietăți)
   try {
-    const [props, reqs] = await Promise.all([
-      dashFetchAll("/properties/?availability=1&for_sale=true&limit=100"),
-      dashFetchAll("/requests/?availability=2&city=5708&limit=100"),
-    ]);
+    const fetchPage = (url) =>
+      fetch(url, { headers: { Authorization: `Token ${CRM_TOKEN}` } }).then(r => r.json());
+    const first = await fetchPage(`${CRM_BASE}/properties/?availability=1&for_sale=true&limit=100`);
+    let props = first.results || [];
+    if (first.next) {
+      const second = await fetchPage(first.next);
+      props = props.concat(second.results || []);
+      if (second.next) {
+        const third = await fetchPage(second.next);
+        props = props.concat(third.results || []);
+      }
+    }
+    const reqFirst = await fetchPage(`${CRM_BASE}/requests/?availability=2&city=5708&limit=1`);
     const stats = dashCalcZoneStats(props);
+    const marketStats = {};
+    for (const [zoneId, s] of Object.entries(stats)) {
+      marketStats[zoneId] = { name: DASH_ZONES[zoneId] || `Zona ${zoneId}`, ...s };
+    }
     res.json({
-      stats,
-      propCount: props.length,
-      requestCount: reqs.length,
+      stats: marketStats,
+      propCount: first.count || props.length,
+      requestCount: reqFirst.count || 0,
       time: new Date().toISOString(),
+      partial: true, // indică că sunt doar primele 300 proprietăți
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

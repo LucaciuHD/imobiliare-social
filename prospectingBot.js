@@ -276,6 +276,19 @@ async function runProspecting() {
     ]);
 
     const stats = calculateZoneStats(allProperties);
+
+    // Salvează în dashboard store — acces instant din UI
+    const marketStats = {};
+    for (const [zoneId, s] of Object.entries(stats)) {
+      marketStats[zoneId] = { name: ZONES[zoneId] || `Zona ${zoneId}`, ...s };
+    }
+    store.setMarket({
+      stats: marketStats,
+      propCount: allProperties.length,
+      requestCount: buyerRequests.length,
+      time: new Date().toISOString(),
+    });
+
     const alerts = [];
 
     for (const prop of allProperties) {

@@ -591,8 +591,9 @@ async function loadMarketStats() {
 
     // Last update
     const t = new Date(data.time);
+    const partialNote = data.partial ? ' · ⚠️ Date parțiale — aștept prima rulare completă a botului (max 30 min)' : '';
     document.getElementById('lastUpdate').textContent =
-      `Actualizat la ${t.toLocaleTimeString('ro-RO', {hour:'2-digit',minute:'2-digit'})} — ${data.propCount} proprietăți analizate`;
+      `Actualizat la ${t.toLocaleTimeString('ro-RO', {hour:'2-digit',minute:'2-digit'})} — ${data.propCount.toLocaleString('ro-RO')} proprietăți analizate${partialNote}`;
   } catch(e) {
     document.getElementById('zoneTableWrap').innerHTML = `<div class="dash-empty">❌ Eroare: ${e.message}</div>`;
   }
