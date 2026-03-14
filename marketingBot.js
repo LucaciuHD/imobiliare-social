@@ -278,12 +278,29 @@ async function approvePost(postId, chatId) {
   }
 }
 
-// Called by bot.js when admin rejects
-function rejectPost(postId) {
+// Called by bot.js when admin rejects — regenerează automat alta
+async function rejectPost(postId) {
   const post = postQueue.get(postId);
   if (post) {
     setTimeout(() => { try { fs.unlinkSync(post.imagePath); } catch {} }, 1000);
     postQueue.delete(postId);
+  }
+  // Generează și trimite o postare nouă
+  try {
+    console.log("[marketing] Postare respinsă — generez alta...");
+    const content = await generateMarketingContent();
+    const imagePath = await generateMarketingImage(content.headline);
+    const newId = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
+    postQueue.set(newId, { ...content, imagePath, timestamp: Date.now() });
+    const tgRes = await sendTelegramPreview(imagePath, content, newId);
+    if (tgRes.ok) {
+      console.log(`[marketing] Nouă postare trimisă pentru aprobare. ID: ${newId}`);
+    }
+    setTimeout(() => {
+      if (postQueue.has(newId)) { rejectPost(newId); }
+    }, 2 * 60 * 60 * 1000);
+  } catch (e) {
+    console.error("[marketing] Eroare la regenerare:", e.message);
   }
 }
 
