@@ -28,10 +28,38 @@ function getCookieVal(cookies, name) {
   return cookies.find(c => c.includes(`${name}=`))?.match(new RegExp(`${name}=([^;]+)`))?.[1] || "";
 }
 
+async function findLoginUrl() {
+  // Detectează URL-ul de login urmărind redirect-ul de la /
+  const rootRes = await fetch(`${CRM_WEB}/`, {
+    headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0" },
+    redirect: "manual",
+  });
+  const location = rootRes.headers.get("location") || "";
+  // Dacă root redirectează spre login, folosim acea adresă
+  if (location && (location.includes("login") || location.includes("accounts"))) {
+    return location.startsWith("http") ? location : `${CRM_WEB}${location}`;
+  }
+  // Fallback: încearcă URL-uri comune
+  for (const path of ["/login/", "/accounts/login/", "/user/login/", "/auth/login/"]) {
+    const r = await fetch(`${CRM_WEB}${path}`, {
+      headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0" },
+      redirect: "manual",
+    });
+    if (r.status === 200 || r.status === 301 || r.status === 302) {
+      if (r.status === 200) return `${CRM_WEB}${path}`;
+    }
+  }
+  return `${CRM_WEB}/login/`;
+}
+
 async function crmLogin() {
   try {
-    // Step 1: GET login page
-    const loginPageRes = await fetch(`${CRM_WEB}/accounts/login/`, {
+    // Step 1: Găsește URL-ul de login
+    const loginUrl = await findLoginUrl();
+    console.log(`[prospecting] Login URL detectat: ${loginUrl}`);
+
+    // Step 2: GET login page
+    const loginPageRes = await fetch(loginUrl, {
       headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0" },
     });
     const html = await loginPageRes.text();
@@ -52,14 +80,14 @@ async function crmLogin() {
 
     console.log(`[prospecting] Login: câmp="${userField}", csrf="${csrfToken ? "ok" : "LIPSĂ"}", csrfCookie="${csrfCookie ? "ok" : "LIPSĂ"}"`);
 
-    // Step 2: POST login
-    const loginRes = await fetch(`${CRM_WEB}/accounts/login/`, {
+    // Step 3: POST login
+    const loginRes = await fetch(loginUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         "Cookie": `csrftoken=${csrfCookie}`,
         "User-Agent": "Mozilla/5.0",
-        "Referer": `${CRM_WEB}/accounts/login/`,
+        "Referer": loginUrl,
       },
       body: new URLSearchParams({
         csrfmiddlewaretoken: csrfToken,
