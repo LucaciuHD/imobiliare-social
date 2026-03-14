@@ -181,71 +181,67 @@ function fitFontSize(text, maxWidth, startSize, minSize) {
   return size;
 }
 
+function makeTextPathLeft(text, x, y, fontSize, color) {
+  if (!_font) {
+    const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `<text x="${x}" y="${y}" font-size="${fontSize}" fill="${color}" font-weight="bold" font-family="sans-serif">${escaped}</text>`;
+  }
+  const p = _font.getPath(text, x, y, fontSize);
+  const d = p.commands.map(c => {
+    const f = v => v.toFixed(2);
+    if (c.type === "M") return `M${f(c.x)},${f(c.y)}`;
+    if (c.type === "L") return `L${f(c.x)},${f(c.y)}`;
+    if (c.type === "C") return `C${f(c.x1)},${f(c.y1)},${f(c.x2)},${f(c.y2)},${f(c.x)},${f(c.y)}`;
+    if (c.type === "Q") return `Q${f(c.x1)},${f(c.y1)},${f(c.x)},${f(c.y)}`;
+    if (c.type === "Z") return "Z";
+    return "";
+  }).join("");
+  return `<path d="${d}" fill="${color}"/>`;
+}
+
 async function generateMarketingImage(headline) {
   const W = 1080, H = 1080;
-  const cx = W / 2;
+  const PAD = 72;
+  const MAX_TEXT_W = W - PAD * 2;
 
-  // Alternăm între 2 layout-uri: galben-pe-negru și negru-pe-galben
-  const useYellowBlock = (Date.now() % 2 === 0);
+  // Alternăm layout: 0=galben complet, 1=negru complet
+  const layout = _categoryIndex % 2;
+  const isYellow = layout === 0;
 
-  // Fundal negru
+  const bgColor = isYellow
+    ? { r: 255, g: 215, b: 0, alpha: 1 }   // #FFD700
+    : { r: 17, g: 17, b: 17, alpha: 1 };    // #111111
+  const textColor = isYellow ? "#111111" : "#FFFFFF";
+  const accentColor = isYellow ? "#111111" : "#FFD700";
+
   const bg = await sharp({
-    create: { width: W, height: H, channels: 4, background: { r: 17, g: 17, b: 17, alpha: 1 } }
+    create: { width: W, height: H, channels: 4, background: bgColor }
   }).png().toBuffer();
 
   const composites = [];
-
-  // --- Layout 1: bloc galben mare în centru, text negru pe el ---
-  // --- Layout 2: text alb mare pe negru, accent galben ---
-  const YELLOW_TOP = 340;
-  const YELLOW_H = 380;
-  const PAD = 60;
-  const MAX_TEXT_W = W - PAD * 2;
-
   let svgParts = [];
 
-  if (useYellowBlock) {
-    // Bloc galben central
-    svgParts.push(`<rect x="0" y="${YELLOW_TOP}" width="${W}" height="${YELLOW_H}" fill="#FFD700"/>`);
-    // Linii decorative negre deasupra și dedesubt blocului
-    svgParts.push(`<rect x="0" y="${YELLOW_TOP}" width="${W}" height="8" fill="#111"/>`);
-    svgParts.push(`<rect x="0" y="${YELLOW_TOP + YELLOW_H - 8}" width="${W}" height="8" fill="#111"/>`);
+  // Linie accent sus
+  svgParts.push(`<rect x="0" y="0" width="${W}" height="12" fill="${accentColor}"/>`);
 
-    // Text negru pe galben
-    const lineCount = headline.length;
-    const totalTextH = lineCount <= 1 ? 0 : (lineCount - 1) * 130;
-    const textStartY = YELLOW_TOP + YELLOW_H / 2 - totalTextH / 2 + 10;
-    headline.forEach((line, i) => {
-      const fontSize = fitFontSize(line, MAX_TEXT_W, 110, 48);
-      svgParts.push(makeTextPath(line, cx, textStartY + i * 130, fontSize, "#111111"));
-    });
+  // Text headline stânga, mare, în treimea superioară-mijlocie
+  const LINE_H = 160;
+  const textAreaTop = 180;
+  headline.forEach((line, i) => {
+    const fontSize = fitFontSize(line, MAX_TEXT_W, 160, 60);
+    svgParts.push(makeTextPathLeft(line, PAD, textAreaTop + i * LINE_H + fontSize * 0.75, fontSize, textColor));
+  });
 
-    // Logo area: text simplu jos pe negru
-    svgParts.push(`<rect x="0" y="${H - 90}" width="${W}" height="90" fill="#111"/>`);
-    const taglineSize = fitFontSize("SIMPLU IMOBILIARE", MAX_TEXT_W, 38, 24);
-    svgParts.push(makeTextPath("SIMPLU IMOBILIARE", cx, H - 38, taglineSize, "#FFD700"));
+  // Linie separator jos
+  svgParts.push(`<rect x="${PAD}" y="${H - 160}" width="${W - PAD * 2}" height="4" fill="${accentColor}"/>`);
 
-  } else {
-    // Bara galbenă stânga (accent vertical)
-    svgParts.push(`<rect x="0" y="0" width="18" height="${H}" fill="#FFD700"/>`);
-    // Bara galbenă sus și jos
-    svgParts.push(`<rect x="0" y="0" width="${W}" height="18" fill="#FFD700"/>`);
-    svgParts.push(`<rect x="0" y="${H - 18}" width="${W}" height="18" fill="#FFD700"/>`);
+  // Tagline jos stânga
+  const tagSize = fitFontSize("simplu imobiliare", MAX_TEXT_W * 0.6, 52, 30);
+  svgParts.push(makeTextPathLeft("simplu imobiliare", PAD, H - 95, tagSize, accentColor));
 
-    // Text alb mare pe negru
-    const lineCount = headline.length;
-    const totalTextH = lineCount <= 1 ? 0 : (lineCount - 1) * 140;
-    const textStartY = H / 2 - totalTextH / 2 - 60;
-    headline.forEach((line, i) => {
-      const fontSize = fitFontSize(line, MAX_TEXT_W - 40, 120, 52);
-      svgParts.push(makeTextPath(line, cx + 10, textStartY + i * 140, fontSize, "#FFFFFF"));
-    });
-
-    // Linie separator + tagline galben jos
-    svgParts.push(`<rect x="${PAD}" y="${H - 120}" width="${W - PAD * 2}" height="3" fill="#FFD700"/>`);
-    const taglineSize = fitFontSize("SIMPLUIMOBILIARE.COM", MAX_TEXT_W, 36, 22);
-    svgParts.push(makeTextPath("SIMPLUIMOBILIARE.COM", cx + 10, H - 50, taglineSize, "#FFD700"));
-  }
+  // Site jos stânga sub tagline
+  const siteSize = fitFontSize("SIMPLUIMOBILIARE.COM", MAX_TEXT_W * 0.5, 30, 18);
+  svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 50, siteSize, accentColor));
 
   const svgOverlay = Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
@@ -254,22 +250,21 @@ async function generateMarketingImage(headline) {
   );
   composites.push({ input: svgOverlay });
 
-  // Logo PNG deasupra (doar pe layout 2, pe negru sus)
-  if (!useYellowBlock) {
-    const logoBuffer = await getLogoBuffer();
-    if (logoBuffer) {
-      try {
-        const resized = await sharp(logoBuffer)
-          .resize({ width: 300, fit: "inside" })
-          .png()
-          .toBuffer({ resolveWithObject: true });
-        composites.unshift({
-          input: resized.data,
-          top: 50,
-          left: Math.round((W - resized.info.width) / 2),
-        });
-      } catch {}
-    }
+  // Logo PNG jos dreapta (dacă se încarcă)
+  const logoBuffer = await getLogoBuffer();
+  if (logoBuffer) {
+    try {
+      const logoColor = isYellow ? null : null; // logo original
+      const resized = await sharp(logoBuffer)
+        .resize({ width: 220, fit: "inside" })
+        .png()
+        .toBuffer({ resolveWithObject: true });
+      composites.push({
+        input: resized.data,
+        top: H - resized.info.height - 50,
+        left: W - resized.info.width - PAD,
+      });
+    } catch {}
   }
 
   const outputPath = path.join(OVERLAY_DIR, `marketing_${Date.now()}.jpg`);
