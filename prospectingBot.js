@@ -64,15 +64,15 @@ async function crmLogin() {
     });
     const html = await loginPageRes.text();
 
+    // Extrage csrfCookie din Set-Cookie
+    const getPageCookies = extractCookies(loginPageRes.headers);
+    const csrfCookie     = getCookieVal(getPageCookies, "csrftoken");
+
     // Extrage CSRF token — dacă pagina e JS-rendered, folosim valoarea cookie-ului direct
     const csrfInputMatch = html.match(/<input[^>]*csrfmiddlewaretoken[^>]*>/i);
     const csrfToken = csrfInputMatch
       ? (csrfInputMatch[0].match(/value="([^"]+)"/) || [])[1] || csrfCookie
       : csrfCookie; // fallback: cookie value = token value (Django AJAX pattern)
-
-    // Extrage csrfCookie din Set-Cookie
-    const getPageCookies = extractCookies(loginPageRes.headers);
-    const csrfCookie     = getCookieVal(getPageCookies, "csrftoken");
 
     // Detectează câmpul de username (username / email / login)
     const inputNames = [...html.matchAll(/<input[^>]+name="([^"]+)"/gi)].map(m => m[1]);
