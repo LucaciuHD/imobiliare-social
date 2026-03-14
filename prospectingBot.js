@@ -255,6 +255,7 @@ function parseSnapshotHtml(html) {
     const tds          = $(row).find("td");
     const locationText = $(tds[4]).text().trim();
     const priceText    = $(tds[5]).text().trim();
+    if (totalRows <= 5) console.log(`[debug-row] type="${typeText}" loc="${locationText}" price="${priceText}"`);
     const sourceUrl    = $(row).find(".publisher-sources-icons a").first().attr("href") || "";
     // Dacă td[7] (coloana etichete) are conținut → deja verificat de agent → skip alertă
     const hasLabel     = $(tds[7]).children().length > 0 || $(tds[7]).text().trim() !== "";
