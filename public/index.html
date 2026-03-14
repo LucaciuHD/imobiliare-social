@@ -644,7 +644,7 @@
             <span class="dash-panel-title">📊 Prețuri pe cartiere — EUR/mp</span>
             <button class="dash-refresh" onclick="loadMarketStats()">↻ Actualizează</button>
           </div>
-          <div class="seg-tabs" id="segTabs" style="display:none">
+          <div class="seg-tabs" id="segTabs">
             <div class="seg-tab-group" id="transTypeTabs">
               <button class="seg-tab active" onclick="switchSegment('sale')">Vânzări</button>
               <button class="seg-tab" onclick="switchSegment('rent')">Închirieri</button>
@@ -746,10 +746,6 @@ async function loadMarketStats() {
     // KPI cards
     document.getElementById('kpiProps').textContent = (data.propCount || 0).toLocaleString('ro-RO');
     document.getElementById('kpiReqs').textContent  = (data.requestCount || 0).toLocaleString('ro-RO');
-
-    // Show/hide segment tabs
-    const hasSeg = data.segments && Object.keys(data.segments).length > 0;
-    document.getElementById('segTabs').style.display = hasSeg ? 'flex' : 'none';
 
     renderZoneTable();
 

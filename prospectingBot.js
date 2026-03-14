@@ -447,4 +447,7 @@ cron.schedule("0 8 * * 1",   sendWeeklyReport, { timezone: "Europe/Bucharest" })
 
 console.log("🔍 Prospecting Bot pornit — monitorizare la 30 min, stats zilnice 9:00, raport luni 8:00");
 
+// Rulare imediată la startup
+setTimeout(runProspecting, 5000);
+
 module.exports = { runProspecting, sendManualStats, sendWeeklyReport };
