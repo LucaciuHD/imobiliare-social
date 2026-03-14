@@ -19,15 +19,40 @@ const alertedIds = new Set();
 
 let session = { csrftoken: null, sessionid: null };
 
+function extractCookies(headers) {
+  const raw = headers.raw?.()?.["set-cookie"] || [];
+  return Array.isArray(raw) ? raw : [raw];
+}
+
+function getCookieVal(cookies, name) {
+  return cookies.find(c => c.includes(`${name}=`))?.match(new RegExp(`${name}=([^;]+)`))?.[1] || "";
+}
+
 async function crmLogin() {
   try {
+    // Step 1: GET login page
     const loginPageRes = await fetch(`${CRM_WEB}/accounts/login/`, {
       headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0" },
     });
     const html = await loginPageRes.text();
-    const csrfToken  = html.match(/name="csrfmiddlewaretoken"\s+value="([^"]+)"/)?.[1] || "";
-    const csrfCookie = (loginPageRes.headers.get("set-cookie") || "").match(/csrftoken=([^;]+)/)?.[1] || "";
 
+    // Extrage CSRF token robust (oricare ordine de atribute)
+    const csrfInputMatch = html.match(/<input[^>]*csrfmiddlewaretoken[^>]*>/i);
+    const csrfToken = csrfInputMatch
+      ? (csrfInputMatch[0].match(/value="([^"]+)"/) || [])[1] || ""
+      : "";
+
+    // Extrage csrfCookie din Set-Cookie
+    const getPageCookies = extractCookies(loginPageRes.headers);
+    const csrfCookie     = getCookieVal(getPageCookies, "csrftoken");
+
+    // Detectează câmpul de username (username / email / login)
+    const inputNames = [...html.matchAll(/<input[^>]+name="([^"]+)"/gi)].map(m => m[1]);
+    const userField  = inputNames.find(f => ["username","email","login"].includes(f.toLowerCase())) || "username";
+
+    console.log(`[prospecting] Login: câmp="${userField}", csrf="${csrfToken ? "ok" : "LIPSĂ"}", csrfCookie="${csrfCookie ? "ok" : "LIPSĂ"}"`);
+
+    // Step 2: POST login
     const loginRes = await fetch(`${CRM_WEB}/accounts/login/`, {
       method: "POST",
       headers: {
@@ -38,17 +63,18 @@ async function crmLogin() {
       },
       body: new URLSearchParams({
         csrfmiddlewaretoken: csrfToken,
-        email: CRM_USERNAME,
+        [userField]: CRM_USERNAME,
         password: CRM_PASSWORD,
         next: "/",
       }).toString(),
       redirect: "manual",
     });
 
-    const rawCookies = loginRes.headers.raw?.()?.["set-cookie"] || [];
-    const cookieArr  = Array.isArray(rawCookies) ? rawCookies : [rawCookies];
-    const sessionid  = cookieArr.find(c => c.includes("sessionid="))?.match(/sessionid=([^;]+)/)?.[1];
-    const newCsrf    = cookieArr.find(c => c.includes("csrftoken="))?.match(/csrftoken=([^;]+)/)?.[1] || csrfCookie;
+    const loginCookies = extractCookies(loginRes.headers);
+    const sessionid    = getCookieVal(loginCookies, "sessionid");
+    const newCsrf      = getCookieVal(loginCookies, "csrftoken") || csrfCookie;
+
+    console.log(`[prospecting] Login răspuns: status=${loginRes.status}, sessionid="${sessionid ? "ok" : "LIPSĂ"}"`);
 
     if (sessionid) {
       session = { csrftoken: newCsrf, sessionid };
