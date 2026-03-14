@@ -8,6 +8,63 @@ const fs = require("fs");
 const crypto = require("crypto");
 const { generateHighlights, applyOverlayToImage } = require("./imageOverlay");
 const FormData = require("form-data");
+const store = require("./dashboardStore");
+
+// ─── Dashboard helpers (independent of prospectingBot to avoid double cron) ──
+const DASH_ZONES = {
+  526:"1 Mai",527:"Aeroport",528:"Bariera Vâlcii",529:"Bordei",
+  530:"Brazda lui Novac",531:"Brestei",532:"Bucovăț",533:"Calea București",
+  534:"Calea Severinului",2247:"Central",535:"Cernele",536:"Ceț",
+  537:"Cornițoiu",538:"Craiovița Nouă",2248:"Est",2249:"Exterior Est",
+  2250:"Exterior Nord",2251:"Exterior Sud",2252:"Exterior Vest",539:"Gării",
+  540:"George Enescu",541:"Ghercești",542:"Lăpuș",543:"Lăpuș Argeș",
+  544:"Lascăr Catargiu",545:"Lunca",546:"Matei Basarab",547:"Mofleni",
+  548:"Nisipului",2253:"Nord",2254:"Nord-Est",2255:"Nord-Vest",
+  2256:"Periferie",549:"Plaiul Vulcănești",550:"Popoveni",551:"Romanești",
+  552:"Rovine",553:"Sărari",554:"Siloz",555:"Sineasca",2257:"Sud",
+  2258:"Sud-Est",2259:"Sud-Vest",556:"Titulescu",2260:"Ultracentral",
+  557:"Valea Roșie",2261:"Vest",
+};
+
+async function dashFetchAll(path) {
+  const results = [];
+  let url = `${CRM_BASE}${path}`;
+  while (url) {
+    const r = await fetch(url, { headers: { Authorization: `Token ${CRM_TOKEN}` } });
+    if (!r.ok) break;
+    const data = await r.json();
+    if (data.results) results.push(...data.results);
+    url = data.next || null;
+  }
+  return results;
+}
+
+function dashCalcZoneStats(props) {
+  const byZone = {};
+  for (const p of props) {
+    let ppsm = p.price_sqm_sale && p.price_sqm_sale > 100 ? Math.round(p.price_sqm_sale) : null;
+    if (!ppsm) {
+      const surface = p.surface_useable || p.surface_built;
+      if (p.price_sale && surface && surface >= 10) ppsm = Math.round(p.price_sale / surface);
+    }
+    if (!ppsm || ppsm < 100 || ppsm > 10000 || !p.zone) continue;
+    if (!byZone[p.zone]) byZone[p.zone] = [];
+    byZone[p.zone].push(ppsm);
+  }
+  const stats = {};
+  for (const [zoneId, prices] of Object.entries(byZone)) {
+    if (prices.length < 2) continue;
+    const sorted = [...prices].sort((a, b) => a - b);
+    stats[zoneId] = {
+      name: DASH_ZONES[zoneId] || `Zona ${zoneId}`,
+      avg: Math.round(prices.reduce((s, v) => s + v, 0) / prices.length),
+      min: sorted[0],
+      max: sorted[sorted.length - 1],
+      count: prices.length,
+    };
+  }
+  return stats;
+}
 
 const OVERLAY_DIR = process.platform === "win32"
   ? path.join(os.tmpdir(), "overlays")
@@ -355,6 +412,32 @@ app.get("/api/fb-debug", async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─── Dashboard API ────────────────────────────────────────────────────────────
+
+// GET market stats (live fetch from CRM)
+app.get("/api/dashboard/market", async (req, res) => {
+  try {
+    const [props, reqs] = await Promise.all([
+      dashFetchAll("/properties/?availability=1&for_sale=true&limit=100"),
+      dashFetchAll("/requests/?availability=2&city=5708&limit=100"),
+    ]);
+    const stats = dashCalcZoneStats(props);
+    res.json({
+      stats,
+      propCount: props.length,
+      requestCount: reqs.length,
+      time: new Date().toISOString(),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET recent alerts (from in-memory store)
+app.get("/api/dashboard/alerts", (req, res) => {
+  res.json(store.alerts);
 });
 
 // Serve frontend

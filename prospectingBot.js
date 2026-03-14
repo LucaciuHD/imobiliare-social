@@ -1,6 +1,7 @@
 require("dotenv").config();
 const fetch = require("node-fetch");
 const cron = require("node-cron");
+const store = require("./dashboardStore");
 
 const CRM_BASE = "https://simpluimobiliare.crmrebs.com/api";
 const CRM_TOKEN = process.env.CRM_TOKEN || "8b5b5946671da2a80fc41481760673ab2868ba99";
@@ -292,6 +293,19 @@ async function runProspecting() {
           formatProperty(prop, ppsm) +
           `\n📊 Media în ${zoneName}: ${zoneStats.avg} €/mp`
         );
+        store.addAlert({
+          type: "opportunity",
+          pctBelow,
+          propId: prop.id,
+          propTitle: prop.title || PROP_TYPES[prop.property_type] || "Proprietate",
+          zone: zoneName,
+          ppsm,
+          avgPpsm: zoneStats.avg,
+          price: prop.price_sale,
+          surface: prop.surface_useable || prop.surface_built,
+          rooms: prop.rooms,
+          crmUrl: `https://simpluimobiliare.crmrebs.com/properties/${prop.id}`,
+        });
         alertedIds.add(prop.id);
       }
 
@@ -306,6 +320,23 @@ async function runProspecting() {
           formatProperty(prop, ppsm) +
           `\n\n<b>Potrivit pentru ${matchingRequests.length} cerere(i):</b>\n${reqList}`
         );
+        store.addAlert({
+          type: "match",
+          propId: prop.id,
+          propTitle: prop.title || PROP_TYPES[prop.property_type] || "Proprietate",
+          zone: ZONES[prop.zone] || `Zona ${prop.zone}`,
+          ppsm,
+          price: prop.price_sale,
+          surface: prop.surface_useable || prop.surface_built,
+          rooms: prop.rooms,
+          matchCount: matchingRequests.length,
+          matches: matchingRequests.slice(0, 3).map(r => ({
+            id: r.id,
+            title: r.title || r.display_id,
+            url: `https://simpluimobiliare.crmrebs.com/requests/${r.id}`,
+          })),
+          crmUrl: `https://simpluimobiliare.crmrebs.com/properties/${prop.id}`,
+        });
         alertedIds.add(`match_${prop.id}`);
       }
     }

@@ -252,6 +252,93 @@
   .publish-status { margin-top:10px; font-size:13px; padding:8px 12px; border-radius:7px; display:none; font-weight:500; }
   .publish-status.success { background:rgba(0,200,81,0.08); border:1px solid rgba(0,200,81,0.2); color:var(--green); display:block; }
   .publish-status.error { background:rgba(255,60,60,0.06); border:1px solid rgba(255,60,60,0.2); color:#ff6b6b; display:block; }
+
+  /* ── Dashboard ── */
+  .nav-tabs {
+    display:flex; gap:4px; margin-left:auto; align-items:center;
+  }
+  .nav-tab {
+    padding:7px 18px; border-radius:8px; border:1px solid transparent;
+    font-family:'Inter',sans-serif; font-size:12px; font-weight:700;
+    cursor:pointer; letter-spacing:0.05em; transition:all 0.18s;
+    color:var(--text-dim); background:transparent;
+  }
+  .nav-tab.active { background:var(--yellow); color:#111; }
+  .nav-tab:not(.active):hover { border-color:var(--yellow-border); color:var(--text); }
+  #dashboardSection { display:none; }
+  .kpi-grid {
+    display:grid; grid-template-columns:repeat(4,1fr); gap:14px;
+    margin-bottom:28px;
+  }
+  @media(max-width:800px) { .kpi-grid { grid-template-columns:repeat(2,1fr); } }
+  .kpi-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; padding:20px 22px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .kpi-label { font-size:10px; letter-spacing:0.15em; text-transform:uppercase; color:var(--text-dim); font-weight:700; }
+  .kpi-value { font-size:30px; font-weight:900; color:var(--yellow); letter-spacing:-0.02em; line-height:1; }
+  .kpi-sub { font-size:11px; color:var(--text-mid); font-weight:500; }
+  .dash-grid {
+    display:grid; grid-template-columns:1fr 380px; gap:20px;
+  }
+  @media(max-width:900px) { .dash-grid { grid-template-columns:1fr; } }
+  .dash-panel {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; overflow:hidden;
+  }
+  .dash-panel-header {
+    padding:16px 20px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .dash-panel-title { font-size:12px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--yellow); }
+  .dash-refresh {
+    background:var(--bg3); border:1px solid var(--border);
+    color:var(--text-dim); border-radius:6px; padding:5px 12px;
+    font-size:11px; font-family:'Inter',sans-serif; font-weight:600;
+    cursor:pointer; transition:all 0.18s;
+  }
+  .dash-refresh:hover { border-color:var(--yellow-border); color:var(--yellow); }
+  .zone-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .zone-table th {
+    padding:10px 16px; text-align:left; font-size:10px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--text-dim); font-weight:700;
+    border-bottom:1px solid var(--border); background:var(--bg2);
+  }
+  .zone-table th:not(:first-child) { text-align:right; }
+  .zone-table td { padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.04); color:#ddd; }
+  .zone-table td:not(:first-child) { text-align:right; }
+  .zone-table tr:hover td { background:rgba(255,215,0,0.03); }
+  .zone-name { font-weight:600; color:var(--text); }
+  .zone-avg { font-weight:800; color:var(--yellow); }
+  .zone-bar-wrap { display:flex; align-items:center; gap:8px; }
+  .zone-bar { height:4px; border-radius:2px; background:rgba(255,215,0,0.6); min-width:4px; }
+  .alert-feed { max-height:520px; overflow-y:auto; }
+  .alert-item {
+    padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.04);
+    animation:fadeUp 0.3s ease both;
+  }
+  .alert-item:last-child { border-bottom:none; }
+  .alert-badge {
+    display:inline-flex; align-items:center; gap:4px;
+    font-size:10px; font-weight:800; letter-spacing:0.08em;
+    padding:3px 8px; border-radius:4px; margin-bottom:7px;
+  }
+  .alert-badge.opportunity { background:rgba(255,152,0,0.15); color:#FF9800; }
+  .alert-badge.match { background:rgba(76,175,80,0.12); color:#4CAF50; }
+  .alert-prop { font-size:13px; font-weight:600; color:var(--text); margin-bottom:3px; }
+  .alert-details { font-size:12px; color:var(--text-mid); line-height:1.6; }
+  .alert-link {
+    display:inline-block; margin-top:6px; font-size:11px;
+    color:var(--yellow); text-decoration:none; font-weight:600;
+  }
+  .alert-link:hover { text-decoration:underline; }
+  .alert-time { font-size:10px; color:var(--text-dim); margin-top:4px; font-weight:500; }
+  .alert-matches { margin-top:6px; }
+  .alert-match-item { font-size:11px; color:#7eb8f7; }
+  .dash-empty { padding:40px 20px; text-align:center; color:var(--text-dim); font-size:13px; }
+  .dash-loading { padding:30px 20px; text-align:center; color:var(--text-dim); font-size:13px; }
+  .last-update { font-size:11px; color:var(--text-dim); font-weight:500; padding:12px 20px; border-top:1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -270,7 +357,11 @@
     <span style="font-weight:700;font-size:11px;letter-spacing:0.12em;color:#ffffff">IMOBILIARE</span>
   </div>
   <div class="header-divider"></div>
-  <div class="header-subtitle">Social Media Generator</div>
+  <div class="header-subtitle">Simplu Imobiliare</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" id="navDashboard" onclick="switchView('dashboard')">📊 Dashboard</button>
+    <button class="nav-tab" id="navSocial" onclick="switchView('social')">📱 Social Media</button>
+  </div>
   <div class="status-pill">
     <div class="status-dot"></div>
     Online
@@ -278,6 +369,7 @@
 </header>
 
 <main>
+  <div id="socialContent">
   <div class="search-section">
     <div class="section-label">Caută Proprietăți</div>
     <div class="search-bar">
@@ -344,16 +436,197 @@
     </div>
   </div>
 
+  <!-- ═══ DASHBOARD ═══ -->
+  <div id="dashboardSection">
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-card">
+        <div class="kpi-label">Proprietăți active</div>
+        <div class="kpi-value" id="kpiProps">—</div>
+        <div class="kpi-sub">de vânzare în CRM</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Cereri cumpărători</div>
+        <div class="kpi-value" id="kpiReqs">—</div>
+        <div class="kpi-sub">cereri active Craiova</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Zone monitorizate</div>
+        <div class="kpi-value" id="kpiZones">—</div>
+        <div class="kpi-sub">cu min. 2 proprietăți</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Alerte primite</div>
+        <div class="kpi-value" id="kpiAlerts">—</div>
+        <div class="kpi-sub">oportunități + match-uri</div>
+      </div>
+    </div>
+
+    <!-- Main grid: zone table + alert feed -->
+    <div class="dash-grid">
+      <!-- Zone stats -->
+      <div class="dash-panel">
+        <div class="dash-panel-header">
+          <span class="dash-panel-title">📊 Prețuri pe cartiere — EUR/mp</span>
+          <button class="dash-refresh" onclick="loadDashboard()">↻ Actualizează</button>
+        </div>
+        <div id="zoneTableWrap">
+          <div class="dash-loading">⏳ Se încarcă datele...</div>
+        </div>
+        <div class="last-update" id="lastUpdate"></div>
+      </div>
+
+      <!-- Alert feed -->
+      <div class="dash-panel">
+        <div class="dash-panel-header">
+          <span class="dash-panel-title">🔔 Alerte recente</span>
+        </div>
+        <div class="alert-feed" id="alertFeed">
+          <div class="dash-loading">⏳ Se încarcă alertele...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="empty-state" id="emptyState">
     <div class="empty-icon">🏠</div>
     <p>Apasă „Încarcă Proprietăți" pentru a vedea<br>proprietățile active din CRM-ul tău.</p>
   </div>
+  </div><!-- /socialContent -->
 </main>
 
 <script>
 const PLATFORMS = ['facebook','instagram','tiktok','whatsapp'];
 const TAB_COLORS = {facebook:'#1877f2',instagram:'#e1306c',tiktok:'#ff0050',whatsapp:'#25d366'};
 let selectedProp = null, currentPage = 1, totalPages = 1, searchQuery = '';
+let dashAutoRefresh = null;
+
+// ── View switching ─────────────────────────────────────────────────────────
+function switchView(view) {
+  const isDash = view === 'dashboard';
+  document.getElementById('dashboardSection').style.display = isDash ? 'block' : 'none';
+  document.getElementById('socialContent').style.display = isDash ? 'none' : 'block';
+  document.getElementById('navDashboard').classList.toggle('active', isDash);
+  document.getElementById('navSocial').classList.toggle('active', !isDash);
+
+  if (isDash) {
+    loadDashboard();
+    if (dashAutoRefresh) clearInterval(dashAutoRefresh);
+    dashAutoRefresh = setInterval(loadDashboard, 5 * 60 * 1000);
+  } else {
+    if (dashAutoRefresh) { clearInterval(dashAutoRefresh); dashAutoRefresh = null; }
+  }
+}
+
+// ── Dashboard data loading ─────────────────────────────────────────────────
+async function loadDashboard() {
+  await Promise.all([loadMarketStats(), loadAlerts()]);
+}
+
+async function loadMarketStats() {
+  try {
+    const res = await fetch('/api/dashboard/market');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    // KPI cards
+    document.getElementById('kpiProps').textContent = data.propCount.toLocaleString('ro-RO');
+    document.getElementById('kpiReqs').textContent = data.requestCount.toLocaleString('ro-RO');
+    const zones = Object.values(data.stats);
+    document.getElementById('kpiZones').textContent = zones.length;
+
+    // Zone table
+    const sorted = zones.sort((a, b) => b.count - a.count);
+    const maxAvg = sorted.reduce((m, z) => Math.max(m, z.avg), 0);
+    const rows = sorted.map(z => {
+      const barW = Math.round((z.avg / maxAvg) * 80);
+      return `<tr>
+        <td class="zone-name">${z.name}</td>
+        <td><div class="zone-bar-wrap"><div class="zone-bar" style="width:${barW}px"></div><span class="zone-avg">${z.avg.toLocaleString('ro-RO')}</span></div></td>
+        <td style="color:#888">${z.min.toLocaleString('ro-RO')}</td>
+        <td style="color:#888">${z.max.toLocaleString('ro-RO')}</td>
+        <td style="color:#555">${z.count}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('zoneTableWrap').innerHTML = `
+      <table class="zone-table">
+        <thead><tr><th>Cartier</th><th>Medie €/mp</th><th>Min</th><th>Max</th><th>Nr.</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+    // Last update
+    const t = new Date(data.time);
+    document.getElementById('lastUpdate').textContent =
+      `Actualizat la ${t.toLocaleTimeString('ro-RO', {hour:'2-digit',minute:'2-digit'})} — ${data.propCount} proprietăți analizate`;
+  } catch(e) {
+    document.getElementById('zoneTableWrap').innerHTML = `<div class="dash-empty">❌ Eroare: ${e.message}</div>`;
+  }
+}
+
+async function loadAlerts() {
+  try {
+    const res = await fetch('/api/dashboard/alerts');
+    const alerts = await res.json();
+
+    // Update KPI
+    document.getElementById('kpiAlerts').textContent = alerts.length;
+
+    const feed = document.getElementById('alertFeed');
+    if (!alerts.length) {
+      feed.innerHTML = `<div class="dash-empty">
+        <div style="font-size:28px;margin-bottom:8px">🔍</div>
+        Nicio alertă încă.<br>
+        <span style="font-size:11px">Botul de prospecting rulează la fiecare 30 min.</span>
+      </div>`;
+      return;
+    }
+
+    feed.innerHTML = alerts.map(a => {
+      const time = new Date(a.time);
+      const timeStr = time.toLocaleString('ro-RO', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      const price = a.price ? Number(a.price).toLocaleString('ro-RO') + ' EUR' : '';
+      const surface = a.surface ? a.surface + ' mp' : '';
+      const rooms = a.rooms ? a.rooms + ' cam.' : '';
+      const meta = [price, surface, rooms].filter(Boolean).join(' · ');
+
+      if (a.type === 'opportunity') {
+        return `<div class="alert-item">
+          <div class="alert-badge opportunity">🔥 ${a.pctBelow}% SUB PIAȚĂ</div>
+          <div class="alert-prop">${a.propTitle}</div>
+          <div class="alert-details">
+            📍 ${a.zone}<br>
+            💰 ${a.ppsm ? a.ppsm.toLocaleString('ro-RO') + ' €/mp' : ''} · Media: ${a.avgPpsm ? a.avgPpsm.toLocaleString('ro-RO') + ' €/mp' : ''}<br>
+            ${meta}
+          </div>
+          <a class="alert-link" href="${a.crmUrl}" target="_blank">↗ Deschide în CRM</a>
+          <div class="alert-time">${timeStr}</div>
+        </div>`;
+      } else {
+        const matchLinks = (a.matches || []).map(m =>
+          `<div class="alert-match-item">👤 <a href="${m.url}" target="_blank" style="color:#7eb8f7;text-decoration:none">${m.title}</a></div>`
+        ).join('');
+        return `<div class="alert-item">
+          <div class="alert-badge match">🎯 MATCH ${a.matchCount} CERERE${a.matchCount > 1 ? 'RI' : ''}</div>
+          <div class="alert-prop">${a.propTitle}</div>
+          <div class="alert-details">
+            📍 ${a.zone}<br>
+            ${meta}
+          </div>
+          <div class="alert-matches">${matchLinks}</div>
+          <a class="alert-link" href="${a.crmUrl}" target="_blank">↗ Deschide în CRM</a>
+          <div class="alert-time">${timeStr}</div>
+        </div>`;
+      }
+    }).join('');
+  } catch(e) {
+    document.getElementById('alertFeed').innerHTML = `<div class="dash-empty">❌ ${e.message}</div>`;
+  }
+}
+
+// ── Init: start on Dashboard ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  switchView('dashboard');
+});
 
 let searchTimer = null;
 function handleSearch(e) {
