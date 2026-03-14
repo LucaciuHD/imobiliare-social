@@ -513,6 +513,89 @@ app.post("/api/bot/prospecting/trigger", (req, res) => {
   runProspecting().catch(e => console.error("[dashboard] prospecting trigger:", e.message));
 });
 
+// GET debug — testează login + prima pagină market-snapshot
+app.get("/api/debug/prospecting", async (req, res) => {
+  const { runProspecting: _r, ...bot } = require("./prospectingBot");
+  const CRM_WEB = "https://simpluimobiliare.crmrebs.com";
+  const CRM_USERNAME = process.env.CRM_USERNAME || "lucadanila@simpluimobiliare.com";
+  const CRM_PASSWORD = process.env.CRM_PASSWORD || "Nuamparola123!";
+  const fetch = require("node-fetch");
+  const cheerio = require("cheerio");
+
+  const result = { steps: [] };
+  try {
+    // Step 1: GET login page
+    const loginPageRes = await fetch(`${CRM_WEB}/accounts/login/`, {
+      headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0" },
+    });
+    result.steps.push({ step: "GET /accounts/login/", status: loginPageRes.status });
+    const loginHtml = await loginPageRes.text();
+    const csrfToken  = loginHtml.match(/name="csrfmiddlewaretoken"\s+value="([^"]+)"/)?.[1] || "";
+    const csrfCookie = (loginPageRes.headers.get("set-cookie") || "").match(/csrftoken=([^;]+)/)?.[1] || "";
+    result.steps.push({ step: "CSRF extracted", csrfToken: csrfToken ? csrfToken.slice(0,10)+"..." : "MISSING", csrfCookie: csrfCookie ? "ok" : "MISSING" });
+
+    // Step 2: POST login
+    const loginRes = await fetch(`${CRM_WEB}/accounts/login/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": `csrftoken=${csrfCookie}`,
+        "User-Agent": "Mozilla/5.0",
+        "Referer": `${CRM_WEB}/accounts/login/`,
+      },
+      body: new URLSearchParams({ csrfmiddlewaretoken: csrfToken, username: CRM_USERNAME, password: CRM_PASSWORD, next: "/" }).toString(),
+      redirect: "manual",
+    });
+    const rawCookies = loginRes.headers.raw?.()?.["set-cookie"] || [];
+    const cookieArr  = Array.isArray(rawCookies) ? rawCookies : [rawCookies];
+    const sessionid  = cookieArr.find(c => c.includes("sessionid="))?.match(/sessionid=([^;]+)/)?.[1];
+    const newCsrf    = cookieArr.find(c => c.includes("csrftoken="))?.match(/csrftoken=([^;]+)/)?.[1] || csrfCookie;
+    result.steps.push({ step: "POST /accounts/login/", status: loginRes.status, sessionid: sessionid ? "ok" : "MISSING", location: loginRes.headers.get("location") });
+
+    if (!sessionid) { return res.json({ ...result, error: "Login eșuat — sessionid lipsă" }); }
+
+    // Step 3: POST market-snapshot/search/ page 1
+    const body = new URLSearchParams({ all_region_obj: "18", page: "1" });
+    const snapRes = await fetch(`${CRM_WEB}/market-snapshot/search/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Requested-With": "XMLHttpRequest",
+        "Cookie": `csrftoken=${newCsrf}; sessionid=${sessionid}`,
+        "X-CSRFToken": newCsrf,
+        "User-Agent": "Mozilla/5.0",
+        "Referer": `${CRM_WEB}/market-snapshot/listings/`,
+      },
+      body: body.toString(),
+    });
+    result.steps.push({ step: "POST /market-snapshot/search/ page=1", status: snapRes.status });
+    const snapData = await snapRes.json();
+    result.steps.push({ step: "JSON parse", success: snapData.success, hasHtml: !!snapData.response?.html, htmlLength: snapData.response?.html?.length });
+
+    // Step 4: Parse HTML
+    if (snapData.response?.html) {
+      const $ = cheerio.load(snapData.response.html);
+      const rows = $("tr[data-id]").length;
+      const sample = [];
+      $("tr[data-id]").slice(0, 3).each((_, row) => {
+        const tds = $(row).find("td");
+        sample.push({
+          id: $(row).attr("data-id")?.trim(),
+          type: $(row).find(".ad-property-type-display").text().trim(),
+          location: $(tds[4]).text().trim(),
+          price: $(tds[5]).text().trim(),
+        });
+      });
+      result.steps.push({ step: "HTML parse", rows, sample });
+    }
+
+    result.storeMarket = store.market ? { propCount: store.market.propCount, segments: Object.keys(store.market.segments || {}) } : null;
+    res.json(result);
+  } catch(e) {
+    res.json({ ...result, error: e.message });
+  }
+});
+
 // Serve frontend
 app.use(express.static("public"));
 app.use(express.static("."));
