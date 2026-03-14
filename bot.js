@@ -254,6 +254,13 @@ async function poll() {
           await handleCauta(chatId, parts.slice(1).join(" "));
         } else if (cmd === "/post") {
           await handlePost(chatId, parts[1], (parts[2] || "facebook").toLowerCase());
+        } else if (cmd === "/testmarketing") {
+          await sendTelegram(chatId, "⏳ Generez postare de test...");
+          try {
+            await getMarketing().runMarketingPost();
+          } catch(e) {
+            await sendTelegram(chatId, `❌ Eroare: ${e.message}`);
+          }
         } else {
           await sendTelegram(chatId, `❓ Comandă necunoscută. Trimite /start pentru ajutor.`);
         }

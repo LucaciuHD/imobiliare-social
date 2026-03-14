@@ -355,4 +355,4 @@ cron.schedule("0 16 * * *", runMarketingPost, { timezone: "Europe/Bucharest" });
 
 console.log("📢 Marketing Bot pornit — postări la 09:00, 13:00, 18:00 (cu aprobare Telegram)");
 
-module.exports = { approvePost, rejectPost };
+module.exports = { approvePost, rejectPost, runMarketingPost };
