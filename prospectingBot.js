@@ -38,7 +38,7 @@ async function crmLogin() {
       },
       body: new URLSearchParams({
         csrfmiddlewaretoken: csrfToken,
-        username: CRM_USERNAME,
+        email: CRM_USERNAME,
         password: CRM_PASSWORD,
         next: "/",
       }).toString(),

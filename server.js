@@ -543,7 +543,7 @@ app.get("/api/debug/prospecting", async (req, res) => {
         "User-Agent": "Mozilla/5.0",
         "Referer": `${CRM_WEB}/accounts/login/`,
       },
-      body: new URLSearchParams({ csrfmiddlewaretoken: csrfToken, username: CRM_USERNAME, password: CRM_PASSWORD, next: "/" }).toString(),
+      body: new URLSearchParams({ csrfmiddlewaretoken: csrfToken, email: CRM_USERNAME, password: CRM_PASSWORD, next: "/" }).toString(),
       redirect: "manual",
     });
     const rawCookies = loginRes.headers.raw?.()?.["set-cookie"] || [];
