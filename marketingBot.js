@@ -27,11 +27,18 @@ fs.mkdirSync(OVERLAY_DIR, { recursive: true });
 const LOGO_URL = "https://media.crmrebs.com/agencies/simpluimobiliare/logo/df1af06e-4181-4a4f-bded-cae60a80194c/Logo_Simplu_Imobiliare-01.png";
 let _logoBuffer = null;
 let _font = null;
-try {
-  _font = opentype.loadSync(path.join(__dirname, "fonts", "NotoSans-Bold.ttf"));
-  console.log("[marketing-font] Loaded OK");
-} catch (e) {
-  console.error("[marketing-font] Failed:", e.message);
+const FONT_PATHS = [
+  path.join(__dirname, "fonts", "BebasNeue-Regular.otf"),
+  path.join(__dirname, "fonts", "NotoSans-Bold.ttf"),
+];
+for (const fp of FONT_PATHS) {
+  try {
+    _font = opentype.loadSync(fp);
+    console.log("[marketing-font] Loaded:", path.basename(fp));
+    break;
+  } catch (e) {
+    console.warn("[marketing-font] Skip:", path.basename(fp), e.message);
+  }
 }
 
 const CONTACT_FOOTER = "\n\n📞 0775 129 022\n🏢 SIMPLU Imobiliare Craiova\n📍 Str. Dimitrie Bolintineanu Nr.14\n🌐 SIMPLUIMOBILIARE.COM";
