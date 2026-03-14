@@ -319,8 +319,8 @@ async function poll() {
           } catch(e) {
             await sendTelegram(chatId, `❌ Eroare: ${e.message}`);
           }
-        } else {
-          await sendTelegram(chatId, `❓ Comandă necunoscută. Trimite /start pentru ajutor.`);
+        } else if (cmd.startsWith("/")) {
+          // Ignoră comenzi necunoscute silențios (evită mesaje duble la redeploy)
         }
       }
     }

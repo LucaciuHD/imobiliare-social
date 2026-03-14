@@ -265,30 +265,73 @@ async function generateMarketingImage(headline, category) {
     return `<path d="M ${x},${y} L ${x + arm},${y + half} L ${x},${y + size}" stroke="${color}" stroke-width="${sw}" fill="none" stroke-opacity="${opacity}" stroke-linejoin="round" stroke-linecap="round"/>`;
   }
 
-  // Siluetă persoană flat (agent imobiliar)
-  function person(cx, bottomY, height, color, opacity) {
-    const headR = Math.round(height * 0.14);
-    const headCY = bottomY - height + headR;
-    const bodyTop = headCY + headR * 1.4;
-    const bw = Math.round(height * 0.30);
-    const shoulderY = bodyTop + Math.round(height * 0.08);
-    const d = [
-      `M ${cx - bw},${bottomY}`,
-      `L ${cx - bw},${shoulderY}`,
-      `Q ${cx - bw * 0.9},${bodyTop} ${cx - bw * 0.45},${bodyTop}`,
-      `L ${cx},${bodyTop + Math.round(height * 0.04)}`,
-      `L ${cx + bw * 0.45},${bodyTop}`,
-      `Q ${cx + bw * 0.9},${bodyTop} ${cx + bw},${shoulderY}`,
-      `L ${cx + bw},${bottomY} Z`,
-    ].join(" ");
-    const tieX1 = cx - Math.round(bw * 0.12), tieX2 = cx + Math.round(bw * 0.12);
-    const tieTop = bodyTop + Math.round(height * 0.04);
-    const tieBot = bottomY - Math.round(height * 0.14);
-    return `<g fill="${color}" opacity="${opacity}">
-      <circle cx="${cx}" cy="${headCY}" r="${headR}"/>
-      <path d="${d}"/>
-      <polygon points="${tieX1},${tieTop} ${tieX2},${tieTop} ${cx + Math.round(bw*0.08)},${tieBot} ${cx - Math.round(bw*0.08)},${tieBot}" opacity="1.0"/>
-    </g>`;
+  // Siluetă persoană flat cu braț care indică spre text
+  // pointLeft=true → brațul se extinde spre stânga (spre text)
+  function person(cx, bottomY, height, color, opacity, pointLeft = true) {
+    const s = height / 520;
+    const p = v => Math.round(v);
+    const dir = pointLeft ? -1 : 1;
+
+    // Y-uri calculate de jos în sus
+    const legH = 175 * s, legW = 44 * s, legSpread = 38 * s;
+    const hipH = 38 * s, hipHW = 58 * s;
+    const torsoH = 150 * s, shldrHW = 68 * s, waistHW = 48 * s;
+    const neckH = 24 * s, neckHW = 18 * s;
+    const headR = 52 * s;
+    const armThick = 20 * s;
+    const armLen = 200 * s;
+
+    const yLegBot = bottomY;
+    const yHipBot = yLegBot - legH;
+    const yHipTop = yHipBot - hipH;      // = yTorsoBot
+    const yTorsoTop = yHipTop - torsoH;  // = yNeckBot
+    const yNeckTop = yTorsoTop - neckH;
+    const yCHead = yNeckTop - headR;
+
+    // Braț care indică: pornește de la umărul "pointing side", se întinde oblic
+    const armSx = cx - dir * shldrHW;
+    const armSy = yTorsoTop + 30 * s;
+    const armEx = armSx - dir * armLen;
+    const armEy = armSy - 55 * s; // ușor în sus
+
+    // Vector perpendicular pe braț (pentru grosime)
+    const adx = armEx - armSx, ady = armEy - armSy;
+    const alen = Math.sqrt(adx * adx + ady * ady);
+    const nx = (-ady / alen) * (armThick / 2);
+    const ny = (adx / alen) * (armThick / 2);
+
+    // Braț la spate (atârnă lângă corp)
+    const arm2Sx = cx + dir * shldrHW;
+    const arm2Sy = yTorsoTop + 30 * s;
+    const arm2Ex = arm2Sx + dir * 18 * s;
+    const arm2Ey = yHipTop - 15 * s;
+    const a2dx = arm2Ex - arm2Sx, a2dy = arm2Ey - arm2Sy;
+    const a2len = Math.sqrt(a2dx * a2dx + a2dy * a2dy);
+    const n2x = (-a2dy / a2len) * (armThick / 2);
+    const n2y = (a2dx / a2len) * (armThick / 2);
+
+    const parts = [
+      // Cap
+      `<circle cx="${p(cx)}" cy="${p(yCHead)}" r="${p(headR)}"/>`,
+      // Gât
+      `<rect x="${p(cx - neckHW)}" y="${p(yNeckTop)}" width="${p(neckHW * 2)}" height="${p(neckH)}"/>`,
+      // Trunchi (trapez)
+      `<path d="M ${p(cx-shldrHW)},${p(yTorsoTop)} L ${p(cx-waistHW)},${p(yHipTop)} L ${p(cx+waistHW)},${p(yHipTop)} L ${p(cx+shldrHW)},${p(yTorsoTop)} Z"/>`,
+      // Braț care indică (trapez alungit)
+      `<polygon points="${p(armSx+nx)},${p(armSy+ny)} ${p(armSx-nx)},${p(armSy-ny)} ${p(armEx-nx*0.35)},${p(armEy-ny*0.35)} ${p(armEx+nx*0.35)},${p(armEy+ny*0.35)}"/>`,
+      // Mână (cerc mic la capătul brațului)
+      `<circle cx="${p(armEx)}" cy="${p(armEy)}" r="${p(armThick * 0.7)}"/>`,
+      // Braț relaxat
+      `<polygon points="${p(arm2Sx+n2x)},${p(arm2Sy+n2y)} ${p(arm2Sx-n2x)},${p(arm2Sy-n2y)} ${p(arm2Ex-n2x*0.5)},${p(arm2Ey-n2y*0.5)} ${p(arm2Ex+n2x*0.5)},${p(arm2Ey+n2y*0.5)}"/>`,
+      // Șolduri
+      `<path d="M ${p(cx-waistHW)},${p(yHipTop)} L ${p(cx-hipHW)},${p(yHipBot)} L ${p(cx+hipHW)},${p(yHipBot)} L ${p(cx+waistHW)},${p(yHipTop)} Z"/>`,
+      // Picior stâng
+      `<path d="M ${p(cx-legSpread*0.2)},${p(yHipBot)} L ${p(cx-legSpread-legW)},${p(yLegBot)} L ${p(cx-legSpread+legW*0.6)},${p(yLegBot)} L ${p(cx+legSpread*0.3)},${p(yHipBot)} Z"/>`,
+      // Picior drept
+      `<path d="M ${p(cx-legSpread*0.3)},${p(yHipBot)} L ${p(cx+legSpread-legW*0.6)},${p(yLegBot)} L ${p(cx+legSpread+legW)},${p(yLegBot)} L ${p(cx+legSpread*0.2)},${p(yHipBot)} Z"/>`,
+    ];
+
+    return `<g fill="${color}" opacity="${opacity}">${parts.join("")}</g>`;
   }
 
   // Pill (dreptunghi rotunjit) cu text centrat
@@ -312,8 +355,8 @@ async function generateMarketingImage(headline, category) {
     svgParts.push(chev(-110, 80, 940, "white", 0.30));
     svgParts.push(chev(-200, 80, 940, "white", 0.13));
 
-    // Siluetă agent imobiliar dreapta, jos
-    svgParts.push(person(W - 160, H - PAD + 20, 520, "#111111", 0.10));
+    // Siluetă agent imobiliar dreapta, braț indică stânga spre text
+    svgParts.push(person(W - 160, H - PAD + 20, 520, "#111111", 0.14, true));
 
     const tx0 = 170, mw0 = W - tx0 - 260;
     const ls0 = Math.max(160, Math.round(H * 0.45 / Math.max(headline.length, 1)));
@@ -341,8 +384,8 @@ async function generateMarketingImage(headline, category) {
 
     svgParts.push(chev(W - 170, 60, 960, "white", 0.24));
 
-    // Siluetă agent imobiliar stânga jos
-    svgParts.push(person(160, H - PAD + 20, 480, "#111111", 0.12));
+    // Siluetă agent imobiliar stânga, braț indică dreapta spre text
+    svgParts.push(person(160, H - PAD + 20, 480, "#111111", 0.14, false));
 
     const ls1 = 185;
     const totalH1 = (headline.length - 1) * ls1;
@@ -371,7 +414,7 @@ async function generateMarketingImage(headline, category) {
 
     // Siluetă agent imobiliar dreapta, în zona galbenă — ușor cropped jos la splitY
     svgParts.push(`<clipPath id="yellowZone"><rect x="0" y="0" width="${W}" height="${splitY}"/></clipPath>`);
-    svgParts.push(`<g clip-path="url(#yellowZone)">${person(W - 140, splitY + 40, 560, "#111111", 0.12)}</g>`);
+    svgParts.push(`<g clip-path="url(#yellowZone)">${person(W - 140, splitY + 40, 560, "#111111", 0.14, true)}</g>`);
 
     const tx2 = 160, mw2 = W - tx2 - 260;
     const ls2 = Math.max(150, Math.round((splitY * 0.66) / Math.max(headline.length, 1)));
@@ -402,8 +445,8 @@ async function generateMarketingImage(headline, category) {
     svgParts.push(`<polygon points="0,0 580,0 0,500" fill="#FFD700"/>`);
     svgParts.push(chev(W - 140, 180, 700, "white", 0.07));
 
-    // Siluetă agent imobiliar jos-dreapta, în alb (inversată pe negru)
-    svgParts.push(person(W - 150, H - PAD + 20, 500, "#FFD700", 0.18));
+    // Siluetă agent imobiliar jos-dreapta galben, braț indică stânga spre text
+    svgParts.push(person(W - 150, H - PAD + 20, 500, "#FFD700", 0.22, true));
 
     const ls3 = 190;
     const totalH3 = (headline.length - 1) * ls3;
