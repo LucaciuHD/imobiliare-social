@@ -265,6 +265,32 @@ async function generateMarketingImage(headline, category) {
     return `<path d="M ${x},${y} L ${x + arm},${y + half} L ${x},${y + size}" stroke="${color}" stroke-width="${sw}" fill="none" stroke-opacity="${opacity}" stroke-linejoin="round" stroke-linecap="round"/>`;
   }
 
+  // Siluetă persoană flat (agent imobiliar)
+  function person(cx, bottomY, height, color, opacity) {
+    const headR = Math.round(height * 0.14);
+    const headCY = bottomY - height + headR;
+    const bodyTop = headCY + headR * 1.4;
+    const bw = Math.round(height * 0.30);
+    const shoulderY = bodyTop + Math.round(height * 0.08);
+    const d = [
+      `M ${cx - bw},${bottomY}`,
+      `L ${cx - bw},${shoulderY}`,
+      `Q ${cx - bw * 0.9},${bodyTop} ${cx - bw * 0.45},${bodyTop}`,
+      `L ${cx},${bodyTop + Math.round(height * 0.04)}`,
+      `L ${cx + bw * 0.45},${bodyTop}`,
+      `Q ${cx + bw * 0.9},${bodyTop} ${cx + bw},${shoulderY}`,
+      `L ${cx + bw},${bottomY} Z`,
+    ].join(" ");
+    const tieX1 = cx - Math.round(bw * 0.12), tieX2 = cx + Math.round(bw * 0.12);
+    const tieTop = bodyTop + Math.round(height * 0.04);
+    const tieBot = bottomY - Math.round(height * 0.14);
+    return `<g fill="${color}" opacity="${opacity}">
+      <circle cx="${cx}" cy="${headCY}" r="${headR}"/>
+      <path d="${d}"/>
+      <polygon points="${tieX1},${tieTop} ${tieX2},${tieTop} ${cx + Math.round(bw*0.08)},${tieBot} ${cx - Math.round(bw*0.08)},${tieBot}" opacity="1.0"/>
+    </g>`;
+  }
+
   // Pill (dreptunghi rotunjit) cu text centrat
   function pill(text, cx, cy, fs, bgColor, textColor) {
     const tw = measureTextWidth(text, fs);
@@ -286,10 +312,10 @@ async function generateMarketingImage(headline, category) {
     svgParts.push(chev(-110, 80, 940, "white", 0.30));
     svgParts.push(chev(-200, 80, 940, "white", 0.13));
 
-    const uW = measureTextWidth("simpluimobiliare.com", 25);
-    svgParts.push(makeTextPathLeft("simpluimobiliare.com", W - PAD - uW, PAD + 30, 25, "#444444"));
+    // Siluetă agent imobiliar dreapta, jos
+    svgParts.push(person(W - 160, H - PAD + 20, 520, "#111111", 0.10));
 
-    const tx0 = 170, mw0 = W - tx0 - PAD;
+    const tx0 = 170, mw0 = W - tx0 - 260;
     const ls0 = Math.max(160, Math.round(H * 0.45 / Math.max(headline.length, 1)));
     const ty0 = Math.round(H * 0.28);
     headline.forEach((line, i) => {
@@ -299,6 +325,9 @@ async function generateMarketingImage(headline, category) {
 
     svgParts.push(makeTextPath(">>>>>>", W / 2 + 50, Math.round(H * 0.62), 82, "#111111"));
     svgParts.push(pill("#alegesimplu", W / 2, Math.round(H * 0.74), 34, "white", "#111111"));
+    // URL jos, nu suprapune textul
+    const uW = measureTextWidth("simpluimobiliare.com", 24);
+    svgParts.push(makeTextPathLeft("simpluimobiliare.com", W - PAD - uW, H - PAD - 22, 24, "#555555"));
 
     logoSpec = { invert: false, x: Math.round(W / 2 - 115), y: H - PAD - 108, width: 230 };
   }
@@ -311,6 +340,9 @@ async function generateMarketingImage(headline, category) {
     bg = await sharp({ create: { width: W, height: H, channels: 4, background: { r: 255, g: 215, b: 0, alpha: 1 } } }).png().toBuffer();
 
     svgParts.push(chev(W - 170, 60, 960, "white", 0.24));
+
+    // Siluetă agent imobiliar stânga jos
+    svgParts.push(person(160, H - PAD + 20, 480, "#111111", 0.12));
 
     const ls1 = 185;
     const totalH1 = (headline.length - 1) * ls1;
@@ -337,16 +369,21 @@ async function generateMarketingImage(headline, category) {
     svgParts.push(`<rect x="0" y="0" width="${W}" height="${splitY}" fill="#FFD700"/>`);
     svgParts.push(chev(-90, 30, splitY + 80, "white", 0.28));
 
-    const uW2 = measureTextWidth("simpluimobiliare.com", 24);
-    svgParts.push(makeTextPathLeft("simpluimobiliare.com", W - PAD - uW2, PAD + 26, 24, "#444444"));
+    // Siluetă agent imobiliar dreapta, în zona galbenă — ușor cropped jos la splitY
+    svgParts.push(`<clipPath id="yellowZone"><rect x="0" y="0" width="${W}" height="${splitY}"/></clipPath>`);
+    svgParts.push(`<g clip-path="url(#yellowZone)">${person(W - 140, splitY + 40, 560, "#111111", 0.12)}</g>`);
 
-    const tx2 = 160, mw2 = W - tx2 - PAD;
+    const tx2 = 160, mw2 = W - tx2 - 260;
     const ls2 = Math.max(150, Math.round((splitY * 0.66) / Math.max(headline.length, 1)));
     const ty2 = Math.round(splitY * 0.24);
     headline.forEach((line, i) => {
       const fs = fitFontSize(line, mw2, 130, 46);
       svgParts.push(makeTextPathLeft(line, tx2, ty2 + i * ls2, fs, "#111111"));
     });
+
+    // URL jos în zona galbenă — nu mai suprapune textul
+    const uW2 = measureTextWidth("simpluimobiliare.com", 22);
+    svgParts.push(makeTextPathLeft("simpluimobiliare.com", W - PAD - uW2, splitY - 22, 22, "#555555"));
 
     svgParts.push(`<rect x="${PAD}" y="${splitY}" width="${W - PAD * 2}" height="2" fill="#ddd"/>`);
     svgParts.push(makeTextPath("0775 129 022", W / 2, splitY + 105, 42, "#111111"));
@@ -364,6 +401,9 @@ async function generateMarketingImage(headline, category) {
 
     svgParts.push(`<polygon points="0,0 580,0 0,500" fill="#FFD700"/>`);
     svgParts.push(chev(W - 140, 180, 700, "white", 0.07));
+
+    // Siluetă agent imobiliar jos-dreapta, în alb (inversată pe negru)
+    svgParts.push(person(W - 150, H - PAD + 20, 500, "#FFD700", 0.18));
 
     const ls3 = 190;
     const totalH3 = (headline.length - 1) * ls3;
