@@ -117,22 +117,33 @@ async function generatePost(platform, property) {
 }
 
 // Command handlers
+function formatPropLine(p, i) {
+  const price = p.price_sale ? Number(p.price_sale).toLocaleString("ro-RO") + " EUR"
+              : p.price_rent ? Number(p.price_rent).toLocaleString("ro-RO") + " EUR/lună" : "La cerere";
+  return `${i+1}. <b>${p.display_id || "CP"+p.id}</b> — ${getType(p)}\n   📍 ${p.title || p.street || "N/A"}\n   💰 ${price}\n\n`;
+}
+
 async function handleLista(chatId) {
-  await sendTelegram(chatId, "⏳ Caut proprietățile active...");
+  await sendTelegram(chatId, "⏳ Caut ultimele proprietăți adăugate...");
   try {
-    const data = await fetchCRM("/properties/?ordering=-created_at&limit=10&availability=1");
-    const props = data.results || [];
-    if (!props.length) return sendTelegram(chatId, "Nu s-au găsit proprietăți active.");
-    let msg = `🏠 <b>Ultimele ${props.length} proprietăți active:</b>\n\n`;
-    props.forEach((p, i) => {
-      const price = p.price_sale ? Number(p.price_sale).toLocaleString("ro-RO") + " EUR"
-                  : p.price_rent ? Number(p.price_rent).toLocaleString("ro-RO") + " EUR/lună" : "La cerere";
-      const type = getType(p);
-      msg += `${i+1}. <b>${p.display_id || "CP"+p.id}</b> — ${type}\n`;
-      msg += `   📍 ${p.title || p.street || "N/A"}\n`;
-      msg += `   💰 ${price}\n\n`;
-    });
-    msg += `\n💡 Folosește <b>/post CP[id] facebook</b> pentru a genera o postare.`;
+    const [saleData, rentData] = await Promise.all([
+      fetchCRM("/properties/?ordering=-id&limit=5&availability=1&transaction_type=1"),
+      fetchCRM("/properties/?ordering=-id&limit=5&availability=1&transaction_type=2"),
+    ]);
+    const sale = saleData.results || [];
+    const rent = rentData.results || [];
+    if (!sale.length && !rent.length) return sendTelegram(chatId, "Nu s-au găsit proprietăți active.");
+
+    let msg = `🏠 <b>Ultimele proprietăți adăugate:</b>\n\n`;
+    if (sale.length) {
+      msg += `🔑 <b>DE VÂNZARE (${saleData.count} total)</b>\n`;
+      sale.forEach((p, i) => { msg += formatPropLine(p, i); });
+    }
+    if (rent.length) {
+      msg += `🏷️ <b>DE ÎNCHIRIERE (${rentData.count} total)</b>\n`;
+      rent.forEach((p, i) => { msg += formatPropLine(p, i); });
+    }
+    msg += `💡 <b>/post CP[id] facebook</b> — generează postare\n💡 <b>/cauta vanzare [cuvinte]</b> sau <b>/cauta inchiriere [cuvinte]</b>`;
     await sendTelegram(chatId, msg);
   } catch(e) {
     await sendTelegram(chatId, `❌ Eroare: ${e.message}`);
@@ -140,25 +151,67 @@ async function handleLista(chatId) {
 }
 
 async function handleCauta(chatId, query) {
-  if (!query) return sendTelegram(chatId, "❌ Specifică un termen de căutare.\nExemplu: <b>/cauta garsoniera</b>");
+  if (!query) return sendTelegram(chatId, "❌ Specifică un termen de căutare.\nExemplu: <b>/cauta garsoniera</b> sau <b>/cauta CP2962555</b>");
   await sendTelegram(chatId, `⏳ Caut proprietăți pentru "<b>${query}</b>"...`);
   try {
-    const cleanQuery = query.replace(/^CP/i, "").trim();
-    const data = await fetchCRM(`/properties/?ordering=-created_at&limit=10&availability=1&search=${encodeURIComponent(cleanQuery)}`);
+    // Dacă e un ID (CP123 sau doar cifre), caută direct după display_id
+    const idMatch = query.match(/^CP?(\d+)$/i);
+    if (idMatch) {
+      const numId = idMatch[1];
+      // Încearcă căutare directă după ID numeric
+      const byId = await fetchCRM(`/properties/${numId}/`);
+      if (!byId.detail && byId.id) {
+        const p = byId;
+        const price = p.price_sale ? Number(p.price_sale).toLocaleString("ro-RO") + " EUR"
+                    : p.price_rent ? Number(p.price_rent).toLocaleString("ro-RO") + " EUR/lună" : "La cerere";
+        const meta = [p.surface_useful && p.surface_useful + " mp", p.rooms && p.rooms + " cam.", p.floor != null && "et." + p.floor].filter(Boolean).join(" · ");
+        let msg = `🏠 <b>${p.display_id || "CP"+p.id}</b> — ${getType(p)}\n\n`;
+        msg += `📍 ${p.title || p.street || "N/A"}\n`;
+        msg += `💰 ${price}\n`;
+        if (meta) msg += `📐 ${meta}\n`;
+        if (p.description) msg += `\n📝 ${p.description.substring(0, 400)}${p.description.length > 400 ? "..." : ""}\n`;
+        msg += `\n💡 <b>/post ${p.display_id || "CP"+p.id} facebook</b> — generează postare`;
+        return sendTelegram(chatId, msg);
+      }
+      // Fallback la căutare text
+      const data = await fetchCRM(`/properties/?ordering=-id&limit=10&availability=1&search=${encodeURIComponent(numId)}`);
+      const props = data.results || [];
+      if (!props.length) return sendTelegram(chatId, `❌ Nu am găsit proprietatea cu ID-ul ${query}.`);
+      return sendTelegram(chatId, formatSearchResults(query, props, data.count));
+    }
+
+    // Detectează filtru vânzare/închiriere din query
+    let txFilter = "";
+    let cleanedQuery = query;
+    if (/\b(vanzare|vânzare|vinde|sale)\b/i.test(query)) {
+      txFilter = "&transaction_type=1";
+      cleanedQuery = query.replace(/\b(vanzare|vânzare|vinde|sale)\b/gi, "").trim();
+    } else if (/\b(inchiriere|închiriere|chirie|rent)\b/i.test(query)) {
+      txFilter = "&transaction_type=2";
+      cleanedQuery = query.replace(/\b(inchiriere|închiriere|chirie|rent)\b/gi, "").trim();
+    }
+
+    const searchParam = cleanedQuery ? `&search=${encodeURIComponent(cleanedQuery)}` : "";
+    const data = await fetchCRM(`/properties/?ordering=-id&limit=10&availability=1${txFilter}${searchParam}`);
     const props = data.results || [];
-    if (!props.length) return sendTelegram(chatId, `Nu s-au găsit proprietăți pentru "${query}".`);
-    let msg = `🔍 <b>Rezultate pentru "${query}" (${data.count} total):</b>\n\n`;
-    props.forEach((p, i) => {
-      const price = p.price_sale ? Number(p.price_sale).toLocaleString("ro-RO") + " EUR"
-                  : p.price_rent ? Number(p.price_rent).toLocaleString("ro-RO") + " EUR/lună" : "La cerere";
-      msg += `${i+1}. <b>${p.display_id || "CP"+p.id}</b> — ${getType(p)}\n`;
-      msg += `   📍 ${p.title || p.street || "N/A"}\n`;
-      msg += `   💰 ${price}\n\n`;
-    });
-    await sendTelegram(chatId, msg);
+    if (!props.length) return sendTelegram(chatId, `Nu s-au găsit proprietăți pentru "<b>${query}</b>".\n\nÎncearcă cu: garsoniera, apartament, casa, teren, vanzare, inchiriere etc.`);
+    await sendTelegram(chatId, formatSearchResults(query, props, data.count));
   } catch(e) {
     await sendTelegram(chatId, `❌ Eroare: ${e.message}`);
   }
+}
+
+function formatSearchResults(query, props, total) {
+  let msg = `🔍 <b>Rezultate pentru "${query}"</b> (${total || props.length} găsite):\n\n`;
+  props.forEach((p, i) => {
+    const price = p.price_sale ? Number(p.price_sale).toLocaleString("ro-RO") + " EUR"
+                : p.price_rent ? Number(p.price_rent).toLocaleString("ro-RO") + " EUR/lună" : "La cerere";
+    msg += `${i+1}. <b>${p.display_id || "CP"+p.id}</b> — ${getType(p)}\n`;
+    msg += `   📍 ${p.title || p.street || "N/A"}\n`;
+    msg += `   💰 ${price}\n\n`;
+  });
+  msg += `💡 <b>/post CP[id] facebook</b> — generează postare`;
+  return msg;
 }
 
 async function handlePost(chatId, cpId, platform) {
@@ -188,15 +241,20 @@ async function handleStart(chatId) {
 
 Bun venit! Iată ce pot face:
 
-/lista — Ultimele 10 proprietăți active
+/lista — Ultimele 5 vânzări + 5 închirieri
 /cauta [termen] — Caută proprietăți
 /post [CP] [platformă] — Generează postare
 
-<b>Exemple:</b>
+<b>Exemple căutare:</b>
+/cauta CP2962555
+/cauta garsoniera
+/cauta vanzare 3 camere
+/cauta inchiriere ultracentral
+/cauta casa 4 camere
+
+<b>Exemple postare:</b>
 /post CP2962555 facebook
 /post CP2962555 instagram
-/post CP2962555 tiktok
-/post CP2962555 whatsapp
 /post CP2962555 toate
 
 <i>Totul este mai SIMPLU cu noi! 😊</i>`;
@@ -248,7 +306,7 @@ async function poll() {
         console.log(`[${new Date().toISOString()}] ${chatId}: ${text}`);
         if (cmd === "/start" || cmd === "/help") {
           await handleStart(chatId);
-        } else if (cmd === "/lista") {
+        } else if (cmd === "/lista" || cmd === "/listare") {
           await handleLista(chatId);
         } else if (cmd === "/cauta") {
           await handleCauta(chatId, parts.slice(1).join(" "));

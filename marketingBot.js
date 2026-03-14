@@ -37,10 +37,12 @@ try {
 const CONTACT_FOOTER = "\n\n📞 0775 129 022\n🏢 SIMPLU Imobiliare Craiova\n📍 Str. Dimitrie Bolintineanu Nr.14\n🌐 SIMPLUIMOBILIARE.COM";
 
 const CATEGORIES = [
-  { name: "sfat_cumparator", topic: "sfaturi practice pentru CUMPĂRĂTORI de imobile în Craiova" },
-  { name: "sfat_vanzator",   topic: "sfaturi practice pentru VÂNZĂTORI de imobile în Craiova" },
-  { name: "brand_simplu",    topic: "de ce SIMPLU Imobiliare este alegerea corectă în Craiova — brand, echipă, profesionalism" },
-  { name: "piata_imobiliara",topic: "piața imobiliară din Craiova — tendințe, prețuri, zone populare, oportunități" },
+  { name: "cumparator_witty",  topic: "frici și greșeli ale cumpărătorilor de imobile — ton ironic, direct, cu umor (fără referințe sezoniere sau de sărbători)" },
+  { name: "vanzator_witty",    topic: "greșeli și mituri ale vânzătorilor de imobile — demontate cu umor și directețe" },
+  { name: "brand_bold",        topic: "de ce SIMPLU Imobiliare — diferența față de alți agenți, ton bold și anti-corporate" },
+  { name: "myth_buster",       topic: "mituri despre imobiliare în România — demontate cu o replică acidă și scurtă" },
+  { name: "relatable_moment",  topic: "momente comice recognoscibile pentru oricine caută sau vinde o locuință" },
+  { name: "piata_provocator",  topic: "realitatea pieței imobiliare Craiova — insight surprinzător, spus direct" },
 ];
 
 let _categoryIndex = 0;
@@ -49,33 +51,48 @@ async function generateMarketingContent() {
   const category = CATEGORIES[_categoryIndex % CATEGORIES.length];
   _categoryIndex++;
 
-  const prompt = `Ești expert imobiliar la SIMPLU Imobiliare Craiova. Creează conținut de social media despre: ${category.topic}.
+  const prompt = `Ești copywriter de social media pentru SIMPLU Imobiliare Craiova. Brandul are un ton bold, direct, ironic și anti-corporate — ca în exemplele de mai jos.
 
-Răspunde STRICT cu un JSON valid în formatul următor (fără text în afara JSON-ului):
+EXEMPLE DE TON ȘI STIL (inspiră-te, nu copia):
+- "Nu vindem iluzii. Găsim locuințe."
+- "Singurul stres? Mutatul canapelei."
+- "Prețul e corect. Actele sunt clare. Agentul știe ce face."
+- "Nu căutăm comision. Căutăm casa potrivită pentru tine."
+- "Pozele proaste costă vânzări. Noi știm să prezentăm."
+- "Negociezi singur? Mult succes. Sau sună-ne."
+- "Ai văzut 10 apartamente și tot nu te-ai decis? Normal. Noi găsim al 11-lea."
+- "Un agent bun nu-ți vinde ce are. Îți găsește ce vrei."
+
+Creează o postare despre: ${category.topic}
+
+Răspunde STRICT cu un JSON valid (fără text în afara JSON-ului):
 {
-  "headline": ["linie1", "linie2", "linie3"],
+  "headline": ["linie1", "linie2"],
   "facebook": "text complet postare Facebook",
   "instagram": "text complet postare Instagram"
 }
 
 REGULI headline (OBLIGATORIU):
-- Exact 3 linii scurte (3-6 cuvinte fiecare)
-- Prima linie cu emoji relevant
-- Impactante, în română
-- Fără punct la final de linie
-- Exemplu: ["🏠 VREI SĂ CUMPERI?", "Iată ce TREBUIE să știi", "înainte de a semna!"]
+- Exact 2 linii (nu 3!)
+- Scurte și punchline — maxim 5 cuvinte per linie
+- Fără emoji în headline — text pur, BOLD vizual
+- Pot fi ALL CAPS sau mixte pentru impact
+- Exemplu bun: ["Nu vindem iluzii.", "Găsim locuințe."]
+- Exemplu bun: ["SINGURUL STRES?", "Mutatul canapelei."]
+- NU folosi fraze lungi sau explicații
 
 REGULI facebook:
-- Max 250 cuvinte, cu emoji-uri
+- Max 150 cuvinte, ton direct și energic, cu 2-3 emoji max
 - NU folosi salutări gen "Bună ziua", "Dragi prieteni"
-- Termină OBLIGATORIU cu: "Totul este mai SIMPLU cu noi! 😊"
-- 10 hashtag-uri relevante la final
+- Începe direct cu o afirmație sau întrebare provocatoare
+- Termină cu: "Totul este mai SIMPLU cu noi! 😊"
+- 8-10 hashtag-uri relevante la final
 - NU include număr de telefon sau adresă
 
 REGULI instagram:
-- Max 200 cuvinte, cu emoji-uri
+- Max 120 cuvinte, același ton bold și direct, cu 3-5 emoji
 - NU folosi salutări gen "Bună ziua", "Dragi prieteni"
-- Termină OBLIGATORIU cu: "Totul este mai SIMPLU cu noi! 😊"
+- Termină cu: "Totul este mai SIMPLU cu noi! 😊"
 - 20 hashtag-uri română+engleză la final
 - NU include număr de telefon sau adresă`;
 
@@ -142,12 +159,28 @@ function makeTextPath(text, cx, cy, fontSize, color) {
   return `<path d="${d}" fill="${color}"/>`;
 }
 
+function measureTextWidth(text, fontSize) {
+  if (!_font) return text.length * fontSize * 0.6;
+  const p = _font.getPath(text, 0, 0, fontSize);
+  const bb = p.getBoundingBox();
+  return bb.x2 - bb.x1;
+}
+
+function fitFontSize(text, maxWidth, startSize, minSize) {
+  let size = startSize;
+  while (size > minSize && measureTextWidth(text, size) > maxWidth) {
+    size -= 2;
+  }
+  return size;
+}
+
 async function generateMarketingImage(headline) {
   const W = 1080, H = 1080;
   const cx = W / 2;
+  const MAX_TEXT_W = W - 80; // 40px padding each side
 
   const bg = await sharp({
-    create: { width: W, height: H, channels: 4, background: { r: 13, g: 27, b: 42, alpha: 1 } }
+    create: { width: W, height: H, channels: 4, background: { r: 17, g: 17, b: 17, alpha: 1 } }
   }).png().toBuffer();
 
   const composites = [];
@@ -156,6 +189,7 @@ async function generateMarketingImage(headline) {
   if (logoBuffer) {
     const resized = await sharp(logoBuffer)
       .resize({ width: 420, fit: "inside" })
+      .png()
       .toBuffer({ resolveWithObject: true });
     composites.push({
       input: resized.data,
@@ -164,21 +198,22 @@ async function generateMarketingImage(headline) {
     });
   }
 
-  const fontSize = 74;
   const lineSpacing = 108;
   const textStartY = 620;
   let textPaths = "";
   headline.forEach((line, i) => {
+    const fontSize = fitFontSize(line, MAX_TEXT_W, 74, 36);
     textPaths += makeTextPath(line, cx, textStartY + i * lineSpacing, fontSize, "#FFFFFF");
   });
 
-  const tagline = makeTextPath("SIMPLUIMOBILIARE.COM", cx, 1010, 34, "#FFD700");
+  const taglineFontSize = fitFontSize("SIMPLUIMOBILIARE.COM", MAX_TEXT_W, 34, 20);
+  const tagline = makeTextPath("SIMPLUIMOBILIARE.COM", cx, 1010, taglineFontSize, "#FFD700");
 
   const svgOverlay = Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
     `<rect x="0" y="0" width="${W}" height="16" fill="#FFD700"/>` +
     `<rect x="0" y="${H - 16}" width="${W}" height="16" fill="#FFD700"/>` +
-    `<rect x="0" y="${H - 70}" width="${W}" height="54" fill="rgba(0,0,0,0.55)"/>` +
+    `<rect x="0" y="${H - 70}" width="${W}" height="54" fill="rgba(0,0,0,0.7)"/>` +
     textPaths + tagline +
     `</svg>`
   );
