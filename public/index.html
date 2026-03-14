@@ -548,8 +548,15 @@
     </div>
   </div>
 
-  <!-- ═══ DASHBOARD ═══ -->
-  <div id="dashboardSection">
+  <div class="empty-state" id="emptyState">
+    <div class="empty-icon">🏠</div>
+    <p>Apasă „Încarcă Proprietăți" pentru a vedea<br>proprietățile active din CRM-ul tău.</p>
+  </div>
+  </div><!-- /socialContent -->
+</main>
+
+<div id="dashboardSection" style="display:none">
+<main style="max-width:1160px;margin:0 auto;padding:36px 24px">
 
     <!-- KPI Cards -->
     <div class="kpi-grid">
@@ -654,13 +661,8 @@
     </div>
 
   </div>
-
-  <div class="empty-state" id="emptyState">
-    <div class="empty-icon">🏠</div>
-    <p>Apasă „Încarcă Proprietăți" pentru a vedea<br>proprietățile active din CRM-ul tău.</p>
-  </div>
-  </div><!-- /socialContent -->
 </main>
+</div><!-- /dashboardSection -->
 
 <script>
 const PLATFORMS = ['facebook','instagram','tiktok','whatsapp'];
@@ -712,7 +714,6 @@ async function loadMarketStats() {
     document.getElementById('kpiProps').textContent = data.propCount.toLocaleString('ro-RO');
     document.getElementById('kpiReqs').textContent = data.requestCount.toLocaleString('ro-RO');
     const zones = Object.values(data.stats);
-    document.getElementById('kpiZones').textContent = zones.length;
 
     // Zone table
     const sorted = zones.sort((a, b) => b.count - a.count);
