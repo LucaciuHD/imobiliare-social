@@ -199,49 +199,106 @@ function makeTextPathLeft(text, x, y, fontSize, color) {
   return `<path d="${d}" fill="${color}"/>`;
 }
 
-async function generateMarketingImage(headline) {
+// Queries per categorie — fotografii reale ca fundal (loremflickr.com, fără API key)
+const CATEGORY_PHOTOS = {
+  cumparator_witty:  ["apartment,modern,interior", "living,room,luxury", "home,keys,door"],
+  vanzator_witty:    ["house,architecture,modern", "villa,exterior,luxury", "property,real,estate"],
+  brand_bold:        ["city,skyline,night", "architecture,building,modern", "urban,lifestyle,street"],
+  myth_buster:       ["handshake,business,deal", "contract,office,professional", "keys,house,sale"],
+  relatable_moment:  ["moving,boxes,home", "couple,house,happy", "family,home,new"],
+  piata_provocator:  ["city,aerial,view", "downtown,buildings,urban", "architecture,cityscape"],
+};
+
+async function fetchBackgroundImage(category) {
+  const queries = CATEGORY_PHOTOS[category] || ["apartment,modern,interior"];
+  const query = queries[Math.floor(Math.random() * queries.length)];
+  try {
+    const res = await fetch(`https://loremflickr.com/1080/1080/${query}`, {
+      redirect: "follow",
+      headers: { "User-Agent": "SimpluImobiliare-Bot/1.0" },
+    });
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > 10000) return buf;
+    }
+  } catch (e) {
+    console.warn("[marketing] Photo fetch failed:", e.message);
+  }
+  return null;
+}
+
+async function generateMarketingImage(headline, category) {
   const W = 1080, H = 1080;
   const PAD = 72;
   const MAX_TEXT_W = W - PAD * 2;
 
-  // Alternăm layout: 0=galben complet, 1=negru complet
+  // Alternăm între 2 stiluri: 0=foto+gradient negru, 1=foto+gradient galben
   const layout = _categoryIndex % 2;
-  const isYellow = layout === 0;
+  const useYellowAccent = layout === 0;
 
-  const bgColor = isYellow
-    ? { r: 255, g: 215, b: 0, alpha: 1 }   // #FFD700
-    : { r: 17, g: 17, b: 17, alpha: 1 };    // #111111
-  const textColor = isYellow ? "#111111" : "#FFFFFF";
-  const accentColor = isYellow ? "#111111" : "#FFD700";
+  // Încearcă să obțin fotografie de fundal
+  const photoBuf = await fetchBackgroundImage(category || "brand_bold");
 
-  const bg = await sharp({
-    create: { width: W, height: H, channels: 4, background: bgColor }
-  }).png().toBuffer();
+  let bg;
+  if (photoBuf) {
+    // Fotografie reală — o întunecăm cu un gradient overlay pentru lizibilitate
+    bg = await sharp(photoBuf)
+      .resize(W, H, { fit: "cover", position: "centre" })
+      .png()
+      .toBuffer();
+  } else {
+    // Fallback: fundal negru solid
+    bg = await sharp({
+      create: { width: W, height: H, channels: 4, background: { r: 17, g: 17, b: 17, alpha: 1 } }
+    }).png().toBuffer();
+  }
 
   const composites = [];
+
+  // Gradient overlay peste foto — face textul lizibil
+  // Sus mai transparent, jos opac (de unde e textul)
+  const gradientSvg = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+      <defs>
+        <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#000000" stop-opacity="0.35"/>
+          <stop offset="40%" stop-color="#000000" stop-opacity="0.55"/>
+          <stop offset="100%" stop-color="#000000" stop-opacity="0.88"/>
+        </linearGradient>
+      </defs>
+      <rect width="${W}" height="${H}" fill="url(#grad)"/>
+    </svg>`
+  );
+  composites.push({ input: gradientSvg });
+
+  // Bara galbenă sus (brand accent)
+  const accentColor = useYellowAccent ? "#FFD700" : "#FFD700"; // întotdeauna galben
+  const textColor = "#FFFFFF";
+  const accentThick = 8;
+
   let svgParts = [];
 
-  // Linie accent sus
-  svgParts.push(`<rect x="0" y="0" width="${W}" height="12" fill="${accentColor}"/>`);
+  // Bara accent sus
+  svgParts.push(`<rect x="0" y="0" width="${W}" height="${accentThick}" fill="${accentColor}"/>`);
 
-  // Text headline stânga, mare, în treimea superioară-mijlocie
-  const LINE_H = 160;
-  const textAreaTop = 180;
+  // Text headline — mare, bold, alb, stânga jos
+  const textAreaTop = H * 0.42; // începe la mijlocul imaginii
+  const LINE_H = 175;
   headline.forEach((line, i) => {
-    const fontSize = fitFontSize(line, MAX_TEXT_W, 160, 60);
-    svgParts.push(makeTextPathLeft(line, PAD, textAreaTop + i * LINE_H + fontSize * 0.75, fontSize, textColor));
+    const fontSize = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 170, 70);
+    svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textAreaTop + i * LINE_H, fontSize, textColor));
   });
 
-  // Linie separator jos
-  svgParts.push(`<rect x="${PAD}" y="${H - 160}" width="${W - PAD * 2}" height="4" fill="${accentColor}"/>`);
+  // Linie galbenă separator înainte de footer
+  svgParts.push(`<rect x="${PAD}" y="${H - 175}" width="120" height="5" fill="${accentColor}"/>`);
 
-  // Tagline jos stânga
-  const tagSize = fitFontSize("simplu imobiliare", MAX_TEXT_W * 0.6, 52, 30);
-  svgParts.push(makeTextPathLeft("simplu imobiliare", PAD, H - 95, tagSize, accentColor));
+  // "SIMPLU IMOBILIARE" jos stânga — galben
+  const tagSize = fitFontSize("SIMPLU IMOBILIARE", MAX_TEXT_W * 0.55, 46, 28);
+  svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 130, tagSize, accentColor));
 
-  // Site jos stânga sub tagline
-  const siteSize = fitFontSize("SIMPLUIMOBILIARE.COM", MAX_TEXT_W * 0.5, 30, 18);
-  svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 50, siteSize, accentColor));
+  // Website jos stânga
+  const siteSize = fitFontSize("SIMPLUIMOBILIARE.COM", MAX_TEXT_W * 0.45, 28, 18);
+  svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 80, siteSize, "#cccccc"));
 
   const svgOverlay = Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
@@ -250,18 +307,17 @@ async function generateMarketingImage(headline) {
   );
   composites.push({ input: svgOverlay });
 
-  // Logo PNG jos dreapta (dacă se încarcă)
+  // Logo PNG jos dreapta
   const logoBuffer = await getLogoBuffer();
   if (logoBuffer) {
     try {
-      const logoColor = isYellow ? null : null; // logo original
       const resized = await sharp(logoBuffer)
-        .resize({ width: 220, fit: "inside" })
+        .resize({ width: 200, fit: "inside" })
         .png()
         .toBuffer({ resolveWithObject: true });
       composites.push({
         input: resized.data,
-        top: H - resized.info.height - 50,
+        top: H - resized.info.height - 60,
         left: W - resized.info.width - PAD,
       });
     } catch {}
@@ -371,7 +427,7 @@ async function rejectPost(postId) {
   try {
     console.log("[marketing] Postare respinsă — generez alta...");
     const content = await generateMarketingContent();
-    const imagePath = await generateMarketingImage(content.headline);
+    const imagePath = await generateMarketingImage(content.headline, content.category);
     const newId = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
     postQueue.set(newId, { ...content, imagePath, timestamp: Date.now() });
     const tgRes = await sendTelegramPreview(imagePath, content, newId);
@@ -392,7 +448,7 @@ async function runMarketingPost() {
     console.log(`[marketing] Generez postare... (${catName})`);
 
     const content = await generateMarketingContent();
-    const imagePath = await generateMarketingImage(content.headline);
+    const imagePath = await generateMarketingImage(content.headline, content.category);
     console.log(`[marketing] Conținut și imagine generate.`);
 
     if (ADMIN_CHAT_ID && BOT_TOKEN) {
