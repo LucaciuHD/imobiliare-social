@@ -7,10 +7,13 @@ const LOGO_URL = "https://media.crmrebs.com/agencies/simpluimobiliare/logo/df1af
 let _logoBuffer = null;
 
 // Register bundled font under unique name — works on both Windows and Linux
+const _fontPath = path.join(__dirname, "fonts", "NotoSans-Bold.ttf");
 try {
-  GlobalFonts.registerFromPath(path.join(__dirname, "fonts", "NotoSans-Bold.ttf"), "SimpluFont");
+  const registered = GlobalFonts.registerFromPath(_fontPath, "SimpluFont");
+  console.log(`[font] register result: ${registered}, path: ${_fontPath}`);
+  console.log(`[font] families: ${JSON.stringify(GlobalFonts.families)}`);
 } catch (e) {
-  console.error("Font register failed:", e.message);
+  console.error("[font] Font register failed:", e.message);
 }
 
 function createLabelPng(text, pw, ph, fontSize, rx) {
