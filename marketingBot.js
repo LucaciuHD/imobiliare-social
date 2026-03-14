@@ -589,26 +589,38 @@ async function approvePost(postId, chatId) {
 }
 
 // Called by bot.js when admin rejects — regenerează automat alta
+// Șterge postarea fără regenerare (folosit la expirare automată)
+function expirePost(postId) {
+  const post = postQueue.get(postId);
+  if (!post) return;
+  setTimeout(() => { try { fs.unlinkSync(post.imagePath); } catch {} }, 1000);
+  postQueue.delete(postId);
+  console.log(`[marketing] Post ${postId} expirat și șters.`);
+  if (ADMIN_CHAT_ID && BOT_TOKEN) {
+    sendTelegram(ADMIN_CHAT_ID, "⏰ Postarea de marketing a expirat (2 ore fără aprobare) și a fost ștearsă.").catch(() => {});
+  }
+}
+
+// Respinge și regenerează cu aceeași categorie a slotului
 async function rejectPost(postId) {
   const post = postQueue.get(postId);
+  const forcedCategory = post?.forcedCategory || null;
   if (post) {
     setTimeout(() => { try { fs.unlinkSync(post.imagePath); } catch {} }, 1000);
     postQueue.delete(postId);
   }
-  // Generează și trimite o postare nouă
   try {
     console.log("[marketing] Postare respinsă — generez alta...");
-    const content = await generateMarketingContent();
+    const content = await generateMarketingContent(forcedCategory);
     const imagePath = await generateMarketingImage(content.headline, content.category);
     const newId = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
-    postQueue.set(newId, { ...content, imagePath, timestamp: Date.now() });
+    postQueue.set(newId, { ...content, imagePath, timestamp: Date.now(), forcedCategory });
     const tgRes = await sendTelegramPreview(imagePath, content, newId);
     if (tgRes.ok) {
       console.log(`[marketing] Nouă postare trimisă pentru aprobare. ID: ${newId}`);
     }
-    setTimeout(() => {
-      if (postQueue.has(newId)) { rejectPost(newId); }
-    }, 2 * 60 * 60 * 1000);
+    // Expiră după 2h — doar șterge, nu mai regenerează
+    setTimeout(() => { if (postQueue.has(newId)) expirePost(newId); }, 2 * 60 * 60 * 1000);
   } catch (e) {
     console.error("[marketing] Eroare la regenerare:", e.message);
   }
@@ -626,7 +638,7 @@ async function runMarketingPost(forcedCategory = null) {
     if (ADMIN_CHAT_ID && BOT_TOKEN) {
       // Preview mode — trimite la admin pentru aprobare
       const postId = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
-      postQueue.set(postId, { ...content, imagePath, timestamp: Date.now() });
+      postQueue.set(postId, { ...content, imagePath, timestamp: Date.now(), forcedCategory });
 
       const tgRes = await sendTelegramPreview(imagePath, content, postId);
       if (tgRes.ok) {
@@ -637,13 +649,8 @@ async function runMarketingPost(forcedCategory = null) {
         await publishPost(postId);
       }
 
-      // Auto-expire după 2 ore dacă nu e aprobat
-      setTimeout(() => {
-        if (postQueue.has(postId)) {
-          console.log(`[marketing] Post ${postId} expirat fără aprobare.`);
-          rejectPost(postId);
-        }
-      }, 2 * 60 * 60 * 1000);
+      // Auto-expire după 2 ore — șterge, nu regenerează
+      setTimeout(() => { if (postQueue.has(postId)) expirePost(postId); }, 2 * 60 * 60 * 1000);
 
     } else {
       // Auto-post mode — fără aprobare
@@ -665,4 +672,4 @@ cron.schedule("0 18 * * *", () => runMarketingPost("vanzator_witty"),   { timezo
 
 console.log("📢 Marketing Bot pornit — postări la 10:00 (brand), 14:00 (cumpărători), 18:00 (vânzători)");
 
-module.exports = { approvePost, rejectPost, runMarketingPost };
+module.exports = { approvePost, rejectPost, expirePost, runMarketingPost };
