@@ -322,14 +322,14 @@ async function poll() {
         } else if (cmd === "/piata") {
           await sendTelegram(chatId, "⏳ Calculez statistici piață...");
           try {
-            await require("./prospectingBot").sendManualStats();
+            await require("./prospectingBot").sendManualStats(chatId);
           } catch(e) {
             await sendTelegram(chatId, `❌ Eroare: ${e.message}`);
           }
         } else if (cmd === "/raport") {
           await sendTelegram(chatId, "⏳ Generez raport săptămânal...");
           try {
-            await require("./prospectingBot").sendWeeklyReport();
+            await require("./prospectingBot").sendWeeklyReport(chatId);
           } catch(e) {
             await sendTelegram(chatId, `❌ Eroare: ${e.message}`);
           }

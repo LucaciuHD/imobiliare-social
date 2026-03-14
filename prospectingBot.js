@@ -141,13 +141,15 @@ function matchesBuyerRequest(prop, req) {
 
 // ─── Telegram ───────────────────────────────────────────────────────────────
 
-async function sendTelegram(text) {
-  if (!BOT_TOKEN || !ADMIN_CHAT_ID) return;
+async function sendTelegram(text, chatId = null) {
+  if (!BOT_TOKEN) return;
+  const target = chatId || ADMIN_CHAT_ID;
+  if (!target) return;
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      chat_id: ADMIN_CHAT_ID,
+      chat_id: target,
       text,
       parse_mode: "HTML",
       disable_web_page_preview: true,
@@ -171,13 +173,12 @@ function formatProperty(p, ppsm) {
 
 // ─── Raport zilnic statistici pe cartiere ───────────────────────────────────
 
-async function sendZoneStatsReport(stats, properties) {
+async function sendZoneStatsReport(stats, properties, chatId = null) {
   const lines = ["📊 <b>STATISTICI PIAȚĂ CRAIOVA</b>\n<i>Prețuri medii EUR/mp (vânzare)</i>\n"];
 
-  // Sortează zonele după număr de proprietăți
   const sorted = Object.entries(stats)
     .sort((a, b) => b[1].count - a[1].count)
-    .slice(0, 20); // top 20 zone cu date suficiente
+    .slice(0, 20);
 
   for (const [zoneId, s] of sorted) {
     const zoneName = ZONES[zoneId] || `Zona ${zoneId}`;
@@ -188,12 +189,12 @@ async function sendZoneStatsReport(stats, properties) {
   }
 
   lines.push(`\n📅 ${new Date().toLocaleDateString("ro-RO")} — Total: ${properties.length} proprietăți analizate`);
-  await sendTelegram(lines.join("\n"));
+  await sendTelegram(lines.join("\n"), chatId);
 }
 
 // ─── Raport săptămânal trend ─────────────────────────────────────────────────
 
-async function sendWeeklyReport() {
+async function sendWeeklyReport(chatId = null) {
   try {
     console.log("[prospecting] Generez raport săptămânal...");
 
@@ -252,11 +253,11 @@ async function sendWeeklyReport() {
       lines.push(`\n📊 Medie generală Craiova: <b>${globalAvg} €/mp</b>`);
     }
 
-    await sendTelegram(lines.join("\n"));
+    await sendTelegram(lines.join("\n"), chatId);
     console.log("[prospecting] Raport săptămânal trimis.");
   } catch (e) {
     console.error("[prospecting] Eroare raport săptămânal:", e.message);
-    await sendTelegram(`❌ Eroare raport săptămânal: ${e.message}`);
+    await sendTelegram(`❌ Eroare raport săptămânal: ${e.message}`, chatId);
   }
 }
 
@@ -328,13 +329,13 @@ async function runProspecting() {
 
 // ─── Comandă manuală: statistici la cerere ──────────────────────────────────
 
-async function sendManualStats() {
+async function sendManualStats(chatId = null) {
   try {
     const properties = await fetchActiveProperties();
     const stats = calculateZoneStats(properties);
-    await sendZoneStatsReport(stats, properties);
+    await sendZoneStatsReport(stats, properties, chatId);
   } catch (e) {
-    await sendTelegram(`❌ Eroare statistici: ${e.message}`);
+    await sendTelegram(`❌ Eroare statistici: ${e.message}`, chatId);
   }
 }
 
