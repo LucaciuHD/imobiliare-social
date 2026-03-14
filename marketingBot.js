@@ -177,48 +177,93 @@ function fitFontSize(text, maxWidth, startSize, minSize) {
 async function generateMarketingImage(headline) {
   const W = 1080, H = 1080;
   const cx = W / 2;
-  const MAX_TEXT_W = W - 80; // 40px padding each side
 
+  // Alternăm între 2 layout-uri: galben-pe-negru și negru-pe-galben
+  const useYellowBlock = (Date.now() % 2 === 0);
+
+  // Fundal negru
   const bg = await sharp({
     create: { width: W, height: H, channels: 4, background: { r: 17, g: 17, b: 17, alpha: 1 } }
   }).png().toBuffer();
 
   const composites = [];
 
-  const logoBuffer = await getLogoBuffer();
-  if (logoBuffer) {
-    const resized = await sharp(logoBuffer)
-      .resize({ width: 420, fit: "inside" })
-      .png()
-      .toBuffer({ resolveWithObject: true });
-    composites.push({
-      input: resized.data,
-      top: 130,
-      left: Math.round((W - resized.info.width) / 2),
+  // --- Layout 1: bloc galben mare în centru, text negru pe el ---
+  // --- Layout 2: text alb mare pe negru, accent galben ---
+  const YELLOW_TOP = 340;
+  const YELLOW_H = 380;
+  const PAD = 60;
+  const MAX_TEXT_W = W - PAD * 2;
+
+  let svgParts = [];
+
+  if (useYellowBlock) {
+    // Bloc galben central
+    svgParts.push(`<rect x="0" y="${YELLOW_TOP}" width="${W}" height="${YELLOW_H}" fill="#FFD700"/>`);
+    // Linii decorative negre deasupra și dedesubt blocului
+    svgParts.push(`<rect x="0" y="${YELLOW_TOP}" width="${W}" height="8" fill="#111"/>`);
+    svgParts.push(`<rect x="0" y="${YELLOW_TOP + YELLOW_H - 8}" width="${W}" height="8" fill="#111"/>`);
+
+    // Text negru pe galben
+    const lineCount = headline.length;
+    const totalTextH = lineCount <= 1 ? 0 : (lineCount - 1) * 130;
+    const textStartY = YELLOW_TOP + YELLOW_H / 2 - totalTextH / 2 + 10;
+    headline.forEach((line, i) => {
+      const fontSize = fitFontSize(line, MAX_TEXT_W, 110, 48);
+      svgParts.push(makeTextPath(line, cx, textStartY + i * 130, fontSize, "#111111"));
     });
+
+    // Logo area: text simplu jos pe negru
+    svgParts.push(`<rect x="0" y="${H - 90}" width="${W}" height="90" fill="#111"/>`);
+    const taglineSize = fitFontSize("SIMPLU IMOBILIARE", MAX_TEXT_W, 38, 24);
+    svgParts.push(makeTextPath("SIMPLU IMOBILIARE", cx, H - 38, taglineSize, "#FFD700"));
+
+  } else {
+    // Bara galbenă stânga (accent vertical)
+    svgParts.push(`<rect x="0" y="0" width="18" height="${H}" fill="#FFD700"/>`);
+    // Bara galbenă sus și jos
+    svgParts.push(`<rect x="0" y="0" width="${W}" height="18" fill="#FFD700"/>`);
+    svgParts.push(`<rect x="0" y="${H - 18}" width="${W}" height="18" fill="#FFD700"/>`);
+
+    // Text alb mare pe negru
+    const lineCount = headline.length;
+    const totalTextH = lineCount <= 1 ? 0 : (lineCount - 1) * 140;
+    const textStartY = H / 2 - totalTextH / 2 - 60;
+    headline.forEach((line, i) => {
+      const fontSize = fitFontSize(line, MAX_TEXT_W - 40, 120, 52);
+      svgParts.push(makeTextPath(line, cx + 10, textStartY + i * 140, fontSize, "#FFFFFF"));
+    });
+
+    // Linie separator + tagline galben jos
+    svgParts.push(`<rect x="${PAD}" y="${H - 120}" width="${W - PAD * 2}" height="3" fill="#FFD700"/>`);
+    const taglineSize = fitFontSize("SIMPLUIMOBILIARE.COM", MAX_TEXT_W, 36, 22);
+    svgParts.push(makeTextPath("SIMPLUIMOBILIARE.COM", cx + 10, H - 50, taglineSize, "#FFD700"));
   }
-
-  const lineSpacing = 108;
-  const textStartY = 620;
-  let textPaths = "";
-  headline.forEach((line, i) => {
-    const fontSize = fitFontSize(line, MAX_TEXT_W, 74, 36);
-    textPaths += makeTextPath(line, cx, textStartY + i * lineSpacing, fontSize, "#FFFFFF");
-  });
-
-  const taglineFontSize = fitFontSize("SIMPLUIMOBILIARE.COM", MAX_TEXT_W, 34, 20);
-  const tagline = makeTextPath("SIMPLUIMOBILIARE.COM", cx, 1010, taglineFontSize, "#FFD700");
 
   const svgOverlay = Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
-    `<rect x="0" y="0" width="${W}" height="16" fill="#FFD700"/>` +
-    `<rect x="0" y="${H - 16}" width="${W}" height="16" fill="#FFD700"/>` +
-    `<rect x="0" y="${H - 70}" width="${W}" height="54" fill="rgba(0,0,0,0.7)"/>` +
-    textPaths + tagline +
+    svgParts.join("") +
     `</svg>`
   );
-
   composites.push({ input: svgOverlay });
+
+  // Logo PNG deasupra (doar pe layout 2, pe negru sus)
+  if (!useYellowBlock) {
+    const logoBuffer = await getLogoBuffer();
+    if (logoBuffer) {
+      try {
+        const resized = await sharp(logoBuffer)
+          .resize({ width: 300, fit: "inside" })
+          .png()
+          .toBuffer({ resolveWithObject: true });
+        composites.unshift({
+          input: resized.data,
+          top: 50,
+          left: Math.round((W - resized.info.width) / 2),
+        });
+      } catch {}
+    }
+  }
 
   const outputPath = path.join(OVERLAY_DIR, `marketing_${Date.now()}.jpg`);
   await sharp(bg).composite(composites).jpeg({ quality: 92 }).toFile(outputPath);
