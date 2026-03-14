@@ -32,23 +32,25 @@ const alertedIds = new Set();
 
 // ─── CRM helpers ───────────────────────────────────────────────────────────────
 
+function addToken(url) {
+  return url + (url.includes("?") ? "&" : "?") + `token=${CRM_TOKEN}`;
+}
+
 async function crmFetch(path) {
-  const r = await fetch(`${CRM_BASE}${path}`, {
-    headers: { Authorization: `Token ${CRM_TOKEN}` },
-  });
+  const r = await fetch(addToken(`${CRM_BASE}${path}`));
   if (!r.ok) throw new Error(`CRM ${path}: ${r.status}`);
   return r.json();
 }
 
 async function fetchAllPages(path) {
   const results = [];
-  let url = `${CRM_BASE}${path}`;
+  let url = addToken(`${CRM_BASE}${path}`);
   while (url) {
-    const r = await fetch(url, { headers: { Authorization: `Token ${CRM_TOKEN}` } });
+    const r = await fetch(url);
     if (!r.ok) break;
     const data = await r.json();
     if (data.results) results.push(...data.results);
-    url = data.next || null;
+    url = data.next ? addToken(data.next) : null;
   }
   return results;
 }

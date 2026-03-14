@@ -32,13 +32,14 @@ const DASH_ZONES = {
 
 async function dashFetchAll(path) {
   const results = [];
-  let url = `${CRM_BASE}${path}`;
+  const addTok = (u) => u + (u.includes("?") ? "&" : "?") + `token=${CRM_TOKEN}`;
+  let url = addTok(`${CRM_BASE}${path}`);
   while (url) {
-    const r = await fetch(url, { headers: { Authorization: `Token ${CRM_TOKEN}` } });
+    const r = await fetch(url);
     if (!r.ok) break;
     const data = await r.json();
     if (data.results) results.push(...data.results);
-    url = data.next || null;
+    url = data.next ? addTok(data.next) : null;
   }
   return results;
 }
