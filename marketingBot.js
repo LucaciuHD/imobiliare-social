@@ -117,13 +117,33 @@ REGULI instagram:
     }),
   });
 
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error("[marketing] Anthropic API error:", response.status, errText.slice(0, 200));
+    throw new Error(`Anthropic API error ${response.status}`);
+  }
   const data = await response.json();
   const text = data.content?.[0]?.text;
-  if (!text) throw new Error("No content from Claude");
+  if (!text) {
+    console.error("[marketing] No content, data:", JSON.stringify(data).slice(0, 200));
+    throw new Error("No content from Claude");
+  }
 
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("Invalid JSON from Claude");
-  const content = JSON.parse(match[0]);
+  // Strip markdown code fences if present
+  const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (!match) {
+    console.error("[marketing] Claude raw response:", text.slice(0, 300));
+    throw new Error("Invalid JSON from Claude");
+  }
+  let content;
+  try {
+    content = JSON.parse(match[0]);
+  } catch (e) {
+    console.error("[marketing] JSON parse error:", e.message);
+    console.error("[marketing] Matched string:", match[0].slice(0, 300));
+    throw e;
+  }
 
   return {
     category: category.name,
