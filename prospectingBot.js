@@ -102,6 +102,9 @@ async function crmLogin() {
     });
 
     const loginCookies = extractCookies(loginRes.headers);
+    const rawCookieHeader = loginRes.headers.get("set-cookie") || "";
+    console.log(`[prospecting] Set-Cookie header: ${rawCookieHeader.slice(0, 200)}`);
+    console.log(`[prospecting] Cookies extrase: ${JSON.stringify(loginCookies.map(c => c.split(";")[0]))}`);
     const sessionid    = getCookieVal(loginCookies, "sessionid");
     const newCsrf      = getCookieVal(loginCookies, "csrftoken") || csrfCookie;
 
