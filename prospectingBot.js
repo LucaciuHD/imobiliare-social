@@ -2,8 +2,7 @@ require("dotenv").config();
 const fetch = require("node-fetch");
 const cheerio = require("cheerio");
 const cron = require("node-cron");
-const store     = require("./dashboardStore");
-const dismissed = require("./dismissedStore");
+const store = require("./dashboardStore");
 
 const CRM_BASE = "https://simpluimobiliare.crmrebs.com/api";
 const CRM_WEB  = "https://simpluimobiliare.crmrebs.com";
@@ -119,6 +118,8 @@ function parseSnapshotHtml(html) {
     const locationText = $(tds[4]).text().trim();
     const priceText    = $(tds[5]).text().trim();
     const sourceUrl    = $(row).find(".publisher-sources-icons a").first().attr("href") || "";
+    // Dacă td[7] (coloana etichete) are conținut → deja verificat de agent → skip alertă
+    const hasLabel     = $(tds[7]).children().length > 0 || $(tds[7]).text().trim() !== "";
 
     // Tip tranzacție
     const isRent = /închiriat|inchiriat/i.test(typeText);
@@ -161,7 +162,7 @@ function parseSnapshotHtml(html) {
       if (ppsm < 100 || ppsm > 20000) ppsm = null;
     }
 
-    listings.push({ id, typeText, propType, transType, surface, price, ppsm, zone, locationText, sourceUrl });
+    listings.push({ id, typeText, propType, transType, surface, price, ppsm, zone, locationText, sourceUrl, hasLabel });
   });
 
   return listings;
@@ -324,7 +325,7 @@ async function runProspecting() {
     const alerts = [];
 
     for (const opp of opps) {
-      if (alertedIds.has(opp.id) || dismissed.has(opp.id)) continue;
+      if (alertedIds.has(opp.id) || opp.hasLabel) continue;
       alertedIds.add(opp.id);
       newOpps++;
       const ptLabel = PROP_LABEL[opp.propType] || opp.propType;
@@ -351,7 +352,7 @@ async function runProspecting() {
 
     // 5. Match-uri cereri cumpărători
     for (const l of listings) {
-      if (alertedIds.has(`match_${l.id}`) || dismissed.has(l.id)) continue;
+      if (alertedIds.has(`match_${l.id}`) || l.hasLabel) continue;
       const matching = buyerRequests.filter(req => matchesBuyerRequest(l, req));
       if (!matching.length) continue;
       alertedIds.add(`match_${l.id}`);
