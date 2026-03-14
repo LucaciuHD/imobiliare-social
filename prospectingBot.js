@@ -64,11 +64,11 @@ async function crmLogin() {
     });
     const html = await loginPageRes.text();
 
-    // Extrage CSRF token robust (oricare ordine de atribute)
+    // Extrage CSRF token — dacă pagina e JS-rendered, folosim valoarea cookie-ului direct
     const csrfInputMatch = html.match(/<input[^>]*csrfmiddlewaretoken[^>]*>/i);
     const csrfToken = csrfInputMatch
-      ? (csrfInputMatch[0].match(/value="([^"]+)"/) || [])[1] || ""
-      : "";
+      ? (csrfInputMatch[0].match(/value="([^"]+)"/) || [])[1] || csrfCookie
+      : csrfCookie; // fallback: cookie value = token value (Django AJAX pattern)
 
     // Extrage csrfCookie din Set-Cookie
     const getPageCookies = extractCookies(loginPageRes.headers);
@@ -86,12 +86,15 @@ async function crmLogin() {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         "Cookie": `csrftoken=${csrfCookie}`,
+        "X-CSRFToken": csrfCookie,
         "User-Agent": "Mozilla/5.0",
         "Referer": loginUrl,
       },
       body: new URLSearchParams({
         csrfmiddlewaretoken: csrfToken,
-        [userField]: CRM_USERNAME,
+        username: CRM_USERNAME,
+        email: CRM_USERNAME,
+        login: CRM_USERNAME,
         password: CRM_PASSWORD,
         next: "/",
       }).toString(),
