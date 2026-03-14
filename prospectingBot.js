@@ -142,30 +142,70 @@ async function crmLogin() {
 
 // ─── Market-snapshot fetch + parse ──────────────────────────────────────────
 
+async function initCsrfForStaticSession() {
+  // Obține csrftoken valid printr-un GET la pagina listings
+  try {
+    const r = await fetch(`${CRM_WEB}/market-snapshot/listings/`, {
+      headers: {
+        "Cookie": `sessionid=${session.sessionid}`,
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html",
+      },
+      redirect: "manual",
+    });
+    // Dacă redirecționează (302) → sesiunea e expirată
+    if (r.status === 301 || r.status === 302 || r.status === 303) {
+      console.error("[prospecting] Sesiunea CRM_SESSION_ID a expirat — actualizează variabila în Railway!");
+      session = { csrftoken: null, sessionid: null };
+      return false;
+    }
+    const setCookies = r.headers.raw?.()?.["set-cookie"] || [];
+    const csrf = getCookieVal(Array.isArray(setCookies) ? setCookies : [setCookies], "csrftoken");
+    if (csrf) {
+      session.csrftoken = csrf;
+      console.log("[prospecting] csrftoken obținut din listings page");
+    } else {
+      // Extrage din body dacă nu e în cookie
+      const html = await r.text();
+      const match = html.match(/csrftoken['":\s]+([a-zA-Z0-9]{30,})/);
+      if (match) session.csrftoken = match[1];
+    }
+    return true;
+  } catch (e) {
+    console.error("[prospecting] initCsrf eroare:", e.message);
+    return false;
+  }
+}
+
 async function fetchSnapshotPage(page) {
-  // Folosește sesiunea statică din env dacă e disponibilă
+  // Activează sesiunea statică din env
   if (CRM_SESSION_ID && !session.sessionid) {
     session = { csrftoken: "", sessionid: CRM_SESSION_ID };
     console.log("[prospecting] Sesiune statică CRM_SESSION_ID activată");
+    // Obține csrftoken valid prin GET la listings
+    if (!(await initCsrfForStaticSession())) return null;
   }
   if (!session.sessionid) {
     if (!(await crmLogin())) return null;
   }
+
   const body = new URLSearchParams({ all_region_obj: "18", page: String(page) });
   let r = await fetch(`${CRM_WEB}/market-snapshot/search/`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       "X-Requested-With": "XMLHttpRequest",
-      "Cookie": `csrftoken=${session.csrftoken}; sessionid=${session.sessionid}`,
-      "X-CSRFToken": session.csrftoken,
+      "Cookie": `csrftoken=${session.csrftoken || ""}; sessionid=${session.sessionid}`,
+      "X-CSRFToken": session.csrftoken || "",
       "User-Agent": "Mozilla/5.0",
       "Referer": `${CRM_WEB}/market-snapshot/listings/`,
     },
     body: body.toString(),
+    redirect: "manual",
   });
-  // sesiune expirată
-  if (r.status === 403 || r.status === 302) {
+
+  // 302 = sesiune expirată (fetch nu urmărește manual)
+  if (r.status === 301 || r.status === 302 || r.status === 303 || r.status === 403) {
     if (CRM_SESSION_ID) {
       console.error("[prospecting] Sesiunea CRM_SESSION_ID a expirat — actualizează variabila în Railway!");
       return null;
@@ -177,15 +217,25 @@ async function fetchSnapshotPage(page) {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         "X-Requested-With": "XMLHttpRequest",
-        "Cookie": `csrftoken=${session.csrftoken}; sessionid=${session.sessionid}`,
-        "X-CSRFToken": session.csrftoken,
+        "Cookie": `csrftoken=${session.csrftoken || ""}; sessionid=${session.sessionid}`,
+        "X-CSRFToken": session.csrftoken || "",
         "User-Agent": "Mozilla/5.0",
         "Referer": `${CRM_WEB}/market-snapshot/listings/`,
       },
       body: body.toString(),
+      redirect: "manual",
     });
   }
+
   if (!r.ok) { console.error("[prospecting] Snapshot page error:", r.status); return null; }
+
+  // Verifică Content-Type înainte de .json() — HTML = sesiune invalidă
+  const ct = r.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) {
+    console.error(`[prospecting] Răspuns non-JSON (${ct}) — sesiune invalidă sau expirată. Actualizează CRM_SESSION_ID în Railway!`);
+    return null;
+  }
+
   const data = await r.json();
   return data.success ? data.response : null;
 }
