@@ -428,9 +428,11 @@ app.get("/api/dashboard/market", async (req, res) => {
   }
   // Prima deschidere după deploy — fetch rapid (primele 3 pagini = ~300 proprietăți)
   try {
-    const fetchPage = (url) =>
-      fetch(url, { headers: { Authorization: `Token ${CRM_TOKEN}` } }).then(r => r.json());
-    const first = await fetchPage(`${CRM_BASE}/properties/?availability=1&for_sale=true&limit=100`);
+    const fetchPage = (url) => {
+      const sep = url.includes("?") ? "&" : "?";
+      return fetch(`${url}${sep}token=${CRM_TOKEN}`).then(r => r.json());
+    };
+    const first = await fetchPage(`${CRM_BASE}/properties/?availability=1&limit=100`);
     let props = first.results || [];
     if (first.next) {
       const second = await fetchPage(first.next);
