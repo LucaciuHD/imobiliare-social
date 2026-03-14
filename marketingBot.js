@@ -485,17 +485,33 @@ async function generateMarketingImage(headline, category) {
 }
 
 async function uploadPhotoToFacebook(imagePath, caption) {
+  // Pas 1: upload foto ca unpublished → obținem photo_id
   const form = new FormData();
   form.append("source", fs.createReadStream(imagePath), { filename: "marketing.jpg", contentType: "image/jpeg" });
-  form.append("caption", caption);
-  form.append("published", "true");
+  form.append("published", "false");
+  form.append("temporary", "true");
   form.append("access_token", FB_PAGE_TOKEN);
-  const r = await fetch(`https://graph.facebook.com/v18.0/${FB_PAGE_ID}/photos`, {
+  const uploadRes = await fetch(`https://graph.facebook.com/v18.0/${FB_PAGE_ID}/photos`, {
     method: "POST", body: form, headers: form.getHeaders(),
   });
-  const d = await r.json();
-  if (d.error) throw new Error(d.error.message);
-  return d.id;
+  const uploadData = await uploadRes.json();
+  if (uploadData.error) throw new Error("FB photo upload: " + uploadData.error.message);
+  const photoId = uploadData.id;
+
+  // Pas 2: creare post în feed cu poza atașată — apare public în timeline
+  const feedRes = await fetch(`https://graph.facebook.com/v18.0/${FB_PAGE_ID}/feed`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: caption,
+      attached_media: [{ media_fbid: photoId }],
+      published: true,
+      access_token: FB_PAGE_TOKEN,
+    }),
+  });
+  const feedData = await feedRes.json();
+  if (feedData.error) throw new Error("FB feed post: " + feedData.error.message);
+  return feedData.id;
 }
 
 async function postToInstagram(imagePublicUrl, caption) {
