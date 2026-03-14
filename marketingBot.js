@@ -9,6 +9,7 @@ const os = require("os");
 const opentype = require("opentype.js");
 const crypto = require("crypto");
 const postQueue = require("./postQueue");
+const store = require("./dashboardStore");
 
 const FB_PAGE_TOKEN = process.env.FB_PAGE_TOKEN;
 const FB_PAGE_ID = process.env.FB_PAGE_ID;
@@ -598,6 +599,7 @@ async function sendTelegramPreview(imagePath, post, postId) {
 async function approvePost(postId, chatId) {
   try {
     await publishPost(postId);
+    store.updateBot('marketing', { approved: store.botActivity.marketing.approved + 1 });
     return { ok: true, text: "✅ Postarea a fost publicată pe Facebook și Instagram!" };
   } catch (e) {
     return { ok: false, text: "❌ Eroare la publicare: " + e.message };
@@ -611,6 +613,7 @@ function expirePost(postId) {
   if (!post) return;
   setTimeout(() => { try { fs.unlinkSync(post.imagePath); } catch {} }, 1000);
   postQueue.delete(postId);
+  store.updateBot('marketing', { expired: store.botActivity.marketing.expired + 1 });
   console.log(`[marketing] Post ${postId} expirat și șters.`);
   if (ADMIN_CHAT_ID && BOT_TOKEN) {
     sendTelegram(ADMIN_CHAT_ID, "⏰ Postarea de marketing a expirat (2 ore fără aprobare) și a fost ștearsă.").catch(() => {});
@@ -624,6 +627,7 @@ async function rejectPost(postId) {
   if (post) {
     setTimeout(() => { try { fs.unlinkSync(post.imagePath); } catch {} }, 1000);
     postQueue.delete(postId);
+    store.updateBot('marketing', { rejected: store.botActivity.marketing.rejected + 1 });
   }
   try {
     console.log("[marketing] Postare respinsă — generez alta...");
@@ -643,6 +647,7 @@ async function rejectPost(postId) {
 }
 
 async function runMarketingPost(forcedCategory = null) {
+  store.updateBot('marketing', { lastRun: new Date().toISOString(), lastStatus: 'running' });
   try {
     const catName = forcedCategory || CATEGORIES[_categoryIndex % CATEGORIES.length].name;
     console.log(`[marketing] Generez postare... (${catName})`);
@@ -650,6 +655,11 @@ async function runMarketingPost(forcedCategory = null) {
     const content = await generateMarketingContent(forcedCategory);
     const imagePath = await generateMarketingImage(content.headline, content.category);
     console.log(`[marketing] Conținut și imagine generate.`);
+
+    store.updateBot('marketing', {
+      lastStatus: 'ok',
+      generated: store.botActivity.marketing.generated + 1,
+    });
 
     if (ADMIN_CHAT_ID && BOT_TOKEN) {
       // Preview mode — trimite la admin pentru aprobare
@@ -678,6 +688,7 @@ async function runMarketingPost(forcedCategory = null) {
 
   } catch (e) {
     console.error(`[marketing] Eroare: ${e.message}`, e.stack);
+    store.updateBot('marketing', { lastStatus: 'error', lastError: e.message });
     if (ADMIN_CHAT_ID && BOT_TOKEN) {
       await sendTelegram(ADMIN_CHAT_ID, `❌ Eroare generare postare marketing:\n${e.message}`).catch(() => {});
     }

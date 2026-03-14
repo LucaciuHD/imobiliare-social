@@ -354,6 +354,17 @@ async function runProspecting() {
       }
     }
 
+    const oppCount = alerts.filter(a => a.includes('OPORTUNITATE')).length;
+    const mCount = alerts.filter(a => a.includes('MATCH')).length;
+    store.updateBot('prospecting', {
+      lastRun: new Date().toISOString(),
+      lastStatus: 'ok',
+      lastError: null,
+      scans: store.botActivity.prospecting.scans + 1,
+      opportunitiesFound: store.botActivity.prospecting.opportunitiesFound + oppCount,
+      matchesFound: store.botActivity.prospecting.matchesFound + mCount,
+    });
+
     if (alerts.length > 0) {
       console.log(`[prospecting] ${alerts.length} alerte noi`);
       for (const alert of alerts) {
@@ -369,6 +380,7 @@ async function runProspecting() {
 
   } catch (e) {
     console.error("[prospecting] Eroare:", e.message);
+    store.updateBot('prospecting', { lastStatus: 'error', lastError: e.message });
     await sendTelegram(`❌ Eroare prospecting: ${e.message}`).catch(() => {});
   }
 }

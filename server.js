@@ -9,6 +9,10 @@ const crypto = require("crypto");
 const { generateHighlights, applyOverlayToImage } = require("./imageOverlay");
 const FormData = require("form-data");
 const store = require("./dashboardStore");
+const postQueue = require("./postQueue");
+// Bot modules — încărcate o singură dată (Node cache previne duplicate cron)
+const { approvePost: mktApprove, rejectPost: mktReject, runMarketingPost } = require("./marketingBot");
+const { runProspecting } = require("./prospectingBot");
 
 // ─── Dashboard helpers (independent of prospectingBot to avoid double cron) ──
 const DASH_ZONES = {
@@ -457,6 +461,53 @@ app.get("/api/dashboard/market", async (req, res) => {
 // GET recent alerts (from in-memory store)
 app.get("/api/dashboard/alerts", (req, res) => {
   res.json(store.alerts);
+});
+
+// GET bot activity (status + stats per bot)
+app.get("/api/dashboard/bot-activity", (req, res) => {
+  res.json(store.botActivity);
+});
+
+// GET marketing pending posts
+app.get("/api/dashboard/marketing/pending", (req, res) => {
+  const posts = [];
+  for (const [postId, post] of postQueue.entries()) {
+    posts.push({
+      postId,
+      previewUrl: `/overlays/${path.basename(post.imagePath)}`,
+      headline: post.headline,
+      facebook: post.facebook,
+      instagram: post.instagram,
+      category: post.category,
+      timestamp: post.timestamp,
+    });
+  }
+  posts.sort((a, b) => b.timestamp - a.timestamp);
+  res.json(posts);
+});
+
+// POST approve marketing post
+app.post("/api/dashboard/marketing/approve/:postId", async (req, res) => {
+  const result = await mktApprove(req.params.postId);
+  res.json(result);
+});
+
+// POST reject marketing post
+app.post("/api/dashboard/marketing/reject/:postId", async (req, res) => {
+  await mktReject(req.params.postId);
+  res.json({ ok: true });
+});
+
+// POST trigger marketing post generation
+app.post("/api/bot/marketing/trigger", (req, res) => {
+  res.json({ ok: true, message: "Generare postare marketing în curs..." });
+  runMarketingPost().catch(e => console.error("[dashboard] marketing trigger:", e.message));
+});
+
+// POST trigger prospecting scan
+app.post("/api/bot/prospecting/trigger", (req, res) => {
+  res.json({ ok: true, message: "Scanare piață în curs..." });
+  runProspecting().catch(e => console.error("[dashboard] prospecting trigger:", e.message));
 });
 
 // Serve frontend

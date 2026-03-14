@@ -364,6 +364,84 @@
   .dash-empty { padding:40px 20px; text-align:center; color:var(--text-dim); font-size:13px; }
   .dash-loading { padding:30px 20px; text-align:center; color:var(--text-dim); font-size:13px; }
   .last-update { font-size:11px; color:var(--text-dim); font-weight:500; padding:12px 20px; border-top:1px solid var(--border); }
+  /* ── Bot status cards ── */
+  .bot-grid {
+    display:grid; grid-template-columns:repeat(2,1fr); gap:14px;
+    margin-bottom:20px;
+  }
+  .bot-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; padding:16px 18px;
+    display:flex; align-items:center; gap:14px;
+  }
+  .bot-card.status-ok { border-left:3px solid var(--green); }
+  .bot-card.status-error { border-left:3px solid #ff6b6b; }
+  .bot-card.status-idle { border-left:3px solid #333; }
+  .bot-card.status-future { border-left:3px solid #333; opacity:0.5; }
+  .bot-icon { font-size:26px; flex-shrink:0; }
+  .bot-info { flex:1; min-width:0; }
+  .bot-name { font-size:13px; font-weight:700; color:var(--text); margin-bottom:2px; }
+  .bot-stat { font-size:11px; color:var(--text-dim); line-height:1.5; }
+  .bot-stat span { color:var(--text-mid); }
+  .bot-trigger {
+    background:var(--bg3); border:1px solid var(--border);
+    color:var(--text-dim); border-radius:8px; padding:7px 12px;
+    font-size:11px; font-family:'Inter',sans-serif; font-weight:700;
+    cursor:pointer; white-space:nowrap; transition:all 0.2s; flex-shrink:0;
+  }
+  .bot-trigger:hover:not(:disabled) { border-color:var(--yellow-border); color:var(--yellow); }
+  .bot-trigger:disabled { opacity:0.3; cursor:not-allowed; }
+  /* ── Marketing pending ── */
+  .mkt-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; overflow:hidden; margin-bottom:14px;
+    display:grid; grid-template-columns:160px 1fr;
+  }
+  .mkt-preview {
+    background:var(--bg3); position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .mkt-preview img { width:160px; height:160px; object-fit:cover; display:block; }
+  .mkt-body { padding:16px 18px; display:flex; flex-direction:column; gap:8px; }
+  .mkt-meta { display:flex; align-items:center; gap:8px; }
+  .mkt-category {
+    font-size:9px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase;
+    background:rgba(255,215,0,0.12); color:var(--yellow);
+    border-radius:4px; padding:3px 7px;
+  }
+  .mkt-time { font-size:10px; color:var(--text-dim); }
+  .mkt-headline { font-size:16px; font-weight:800; color:var(--text); line-height:1.3; }
+  .mkt-text {
+    font-size:12px; color:var(--text-mid); line-height:1.6;
+    overflow:hidden; display:-webkit-box;
+    -webkit-line-clamp:3; -webkit-box-orient:vertical;
+  }
+  .mkt-actions { display:flex; gap:8px; margin-top:auto; }
+  .mkt-approve {
+    flex:1; background:rgba(0,200,81,0.1); border:1px solid rgba(0,200,81,0.3);
+    color:var(--green); border-radius:8px; padding:9px; font-size:13px;
+    font-family:'Inter',sans-serif; font-weight:700; cursor:pointer; transition:all 0.2s;
+  }
+  .mkt-approve:hover { background:rgba(0,200,81,0.2); }
+  .mkt-reject {
+    flex:1; background:rgba(255,60,60,0.06); border:1px solid rgba(255,60,60,0.2);
+    color:#ff6b6b; border-radius:8px; padding:9px; font-size:13px;
+    font-family:'Inter',sans-serif; font-weight:700; cursor:pointer; transition:all 0.2s;
+  }
+  .mkt-reject:hover { background:rgba(255,60,60,0.12); }
+  .mkt-btn-loading { opacity:0.5; pointer-events:none; }
+  /* ── Dashboard sub-tabs ── */
+  .dash-tabs { display:flex; gap:6px; margin-bottom:20px; }
+  .dash-tab {
+    padding:8px 16px; border-radius:8px; border:1px solid var(--border);
+    background:transparent; color:var(--text-dim);
+    font-family:'Inter',sans-serif; font-size:12px; font-weight:700;
+    cursor:pointer; transition:all 0.18s; letter-spacing:0.04em;
+  }
+  .dash-tab:hover { border-color:var(--yellow-border); color:var(--text); }
+  .dash-tab.active { background:rgba(255,215,0,0.1); border-color:var(--yellow-border); color:var(--yellow); }
+  .dash-section { display:none; }
+  .dash-section.active { display:block; }
 </style>
 </head>
 <body>
@@ -472,8 +550,9 @@
 
   <!-- ═══ DASHBOARD ═══ -->
   <div id="dashboardSection">
+
     <!-- KPI Cards -->
-    <div class="kpi-grid" id="kpiGrid">
+    <div class="kpi-grid">
       <div class="kpi-card">
         <div class="kpi-label">Proprietăți active</div>
         <div class="kpi-value" id="kpiProps">—</div>
@@ -485,41 +564,95 @@
         <div class="kpi-sub">cereri active Craiova</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Zone monitorizate</div>
-        <div class="kpi-value" id="kpiZones">—</div>
-        <div class="kpi-sub">cu min. 2 proprietăți</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Alerte primite</div>
+        <div class="kpi-label">Alerte piață</div>
         <div class="kpi-value" id="kpiAlerts">—</div>
         <div class="kpi-sub">oportunități + match-uri</div>
       </div>
-    </div>
-
-    <!-- Main grid: zone table + alert feed -->
-    <div class="dash-grid">
-      <!-- Zone stats -->
-      <div class="dash-panel">
-        <div class="dash-panel-header">
-          <span class="dash-panel-title">📊 Prețuri pe cartiere — EUR/mp</span>
-          <button class="dash-refresh" onclick="loadDashboard()">↻ Actualizează</button>
-        </div>
-        <div id="zoneTableWrap">
-          <div class="dash-loading">⏳ Se încarcă datele...</div>
-        </div>
-        <div class="last-update" id="lastUpdate"></div>
-      </div>
-
-      <!-- Alert feed -->
-      <div class="dash-panel">
-        <div class="dash-panel-header">
-          <span class="dash-panel-title">🔔 Alerte recente</span>
-        </div>
-        <div class="alert-feed" id="alertFeed">
-          <div class="dash-loading">⏳ Se încarcă alertele...</div>
-        </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Marketing generat</div>
+        <div class="kpi-value" id="kpiMkt">—</div>
+        <div class="kpi-sub">postări totale</div>
       </div>
     </div>
+
+    <!-- Bot status row -->
+    <div class="bot-grid">
+      <div class="bot-card status-idle" id="botCard-marketing">
+        <div class="bot-icon">📣</div>
+        <div class="bot-info">
+          <div class="bot-name">Bot Marketing</div>
+          <div class="bot-stat" id="botStat-marketing">Se încarcă...</div>
+        </div>
+        <button class="bot-trigger" id="triggerMarketing" onclick="triggerBot('marketing')">▶ Generează</button>
+      </div>
+      <div class="bot-card status-idle" id="botCard-prospecting">
+        <div class="bot-icon">🔍</div>
+        <div class="bot-info">
+          <div class="bot-name">Bot Prospecting</div>
+          <div class="bot-stat" id="botStat-prospecting">Se încarcă...</div>
+        </div>
+        <button class="bot-trigger" id="triggerProspecting" onclick="triggerBot('prospecting')">▶ Scanează</button>
+      </div>
+      <div class="bot-card status-future">
+        <div class="bot-icon">💬</div>
+        <div class="bot-info">
+          <div class="bot-name">Bot Vânzări WhatsApp</div>
+          <div class="bot-stat">Match cereri + follow-up automat</div>
+        </div>
+        <button class="bot-trigger" disabled>🔜 Luni</button>
+      </div>
+      <div class="bot-card status-future">
+        <div class="bot-icon">🏠</div>
+        <div class="bot-info">
+          <div class="bot-name">Bot Preluări</div>
+          <div class="bot-stat">Rapoarte proprietari + ajustare preț</div>
+        </div>
+        <button class="bot-trigger" disabled>🔜 Planificat</button>
+      </div>
+    </div>
+
+    <!-- Sub-tabs -->
+    <div class="dash-tabs">
+      <button class="dash-tab active" onclick="switchDashTab('prospecting')">🔍 Piață &amp; Alerte</button>
+      <button class="dash-tab" onclick="switchDashTab('marketing')">📣 Marketing</button>
+    </div>
+
+    <!-- Tab: Prospecting -->
+    <div class="dash-section active" id="dashTab-prospecting">
+      <div class="dash-grid">
+        <div class="dash-panel">
+          <div class="dash-panel-header">
+            <span class="dash-panel-title">📊 Prețuri pe cartiere — EUR/mp</span>
+            <button class="dash-refresh" onclick="loadMarketStats()">↻ Actualizează</button>
+          </div>
+          <div id="zoneTableWrap"><div class="dash-loading">⏳ Se încarcă...</div></div>
+          <div class="last-update" id="lastUpdate"></div>
+        </div>
+        <div class="dash-panel">
+          <div class="dash-panel-header">
+            <span class="dash-panel-title">🔔 Alerte recente</span>
+            <button class="dash-refresh" onclick="loadAlerts()">↻</button>
+          </div>
+          <div class="alert-feed" id="alertFeed">
+            <div class="dash-loading">⏳ Se încarcă...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Marketing -->
+    <div class="dash-section" id="dashTab-marketing">
+      <div class="dash-panel" style="margin-bottom:20px">
+        <div class="dash-panel-header">
+          <span class="dash-panel-title">📣 Postări în așteptare de aprobare</span>
+          <button class="dash-refresh" onclick="loadPendingPosts()">↻ Actualizează</button>
+        </div>
+        <div id="pendingPostsWrap">
+          <div class="dash-loading">⏳ Se încarcă...</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <div class="empty-state" id="emptyState">
@@ -553,9 +686,20 @@ function switchView(view) {
   }
 }
 
+// ── Dashboard sub-tabs ────────────────────────────────────────────────────
+function switchDashTab(tab) {
+  document.querySelectorAll('.dash-tab').forEach((btn, i) => {
+    const tabs = ['prospecting','marketing'];
+    btn.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.dash-section').forEach(s => s.classList.remove('active'));
+  document.getElementById('dashTab-' + tab)?.classList.add('active');
+  if (tab === 'marketing') loadPendingPosts();
+}
+
 // ── Dashboard data loading ─────────────────────────────────────────────────
 async function loadDashboard() {
-  await Promise.all([loadMarketStats(), loadAlerts()]);
+  await Promise.all([loadMarketStats(), loadAlerts(), loadBotActivity(), loadPendingPosts()]);
 }
 
 async function loadMarketStats() {
@@ -656,6 +800,145 @@ async function loadAlerts() {
     }).join('');
   } catch(e) {
     document.getElementById('alertFeed').innerHTML = `<div class="dash-empty">❌ ${e.message}</div>`;
+  }
+}
+
+// ── Bot activity ──────────────────────────────────────────────────────────
+async function loadBotActivity() {
+  try {
+    const res = await fetch('/api/dashboard/bot-activity');
+    const data = await res.json();
+
+    // Update KPI marketing
+    document.getElementById('kpiMkt').textContent = data.marketing?.generated ?? '—';
+
+    renderBotCard('marketing', data.marketing, {
+      ok: (d) => `Generat: <span>${d.generated}</span> · Aprobat: <span>${d.approved}</span> · Respins: <span>${d.rejected}</span>`,
+      error: (d) => `❌ ${d.lastError || 'Eroare necunoscută'}`,
+      idle: () => 'Postări la 10:00, 14:00, 18:00',
+    });
+    renderBotCard('prospecting', data.prospecting, {
+      ok: (d) => `Scanări: <span>${d.scans}</span> · Oportunități: <span>${d.opportunitiesFound}</span> · Match-uri: <span>${d.matchesFound}</span>`,
+      error: (d) => `❌ ${d.lastError || 'Eroare necunoscută'}`,
+      idle: () => 'Monitorizare la fiecare 30 min',
+    });
+  } catch {}
+}
+
+function renderBotCard(name, data, templates) {
+  const card = document.getElementById('botCard-' + name);
+  const stat = document.getElementById('botStat-' + name);
+  if (!card || !stat) return;
+
+  if (!data?.lastRun) {
+    card.className = 'bot-card status-idle';
+    stat.innerHTML = templates.idle(data || {});
+    return;
+  }
+  const t = new Date(data.lastRun);
+  const timeStr = t.toLocaleTimeString('ro-RO', {hour:'2-digit',minute:'2-digit'});
+  const isError = data.lastStatus === 'error';
+  card.className = `bot-card status-${isError ? 'error' : 'ok'}`;
+  stat.innerHTML = (isError ? templates.error(data) : templates.ok(data)) +
+    `<br><span>Ultima rulare: ${timeStr}</span>`;
+}
+
+async function triggerBot(name) {
+  const btn = document.getElementById('trigger' + name.charAt(0).toUpperCase() + name.slice(1));
+  if (!btn) return;
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ În curs...';
+  try {
+    await fetch(`/api/bot/${name}/trigger`, { method: 'POST' });
+    btn.textContent = '✓ Pornit!';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+    // Refresh activity after 5s (bot runs async)
+    setTimeout(loadBotActivity, 5000);
+  } catch {
+    btn.textContent = orig;
+    btn.disabled = false;
+  }
+}
+
+// ── Marketing pending posts ──────────────────────────────────────────────
+async function loadPendingPosts() {
+  const wrap = document.getElementById('pendingPostsWrap');
+  if (!wrap) return;
+  try {
+    const res = await fetch('/api/dashboard/marketing/pending');
+    const posts = await res.json();
+    if (!posts.length) {
+      wrap.innerHTML = `<div class="dash-empty">
+        <div style="font-size:28px;margin-bottom:8px">📣</div>
+        Nicio postare în așteptare.<br>
+        <span style="font-size:11px">Postările generate la 10:00, 14:00, 18:00 apar aici pentru aprobare.</span>
+      </div>`;
+      return;
+    }
+    wrap.innerHTML = posts.map(p => {
+      const elapsed = Math.round((Date.now() - p.timestamp) / 60000);
+      const timeStr = elapsed < 60 ? `${elapsed} min în urmă` : `${Math.round(elapsed/60)} ore în urmă`;
+      const catLabel = {
+        brand_bold:'Brand Bold', cumparator_witty:'Cumpărător', vanzator_witty:'Vânzător',
+        myth_buster:'Mituire', relatable_moment:'Relatable', piata_provocator:'Piață'
+      }[p.category] || p.category;
+      return `<div class="mkt-card" id="mktCard-${p.postId}">
+        <div class="mkt-preview">
+          <img src="${p.previewUrl}" alt="preview" onerror="this.parentElement.innerHTML='📷'">
+        </div>
+        <div class="mkt-body">
+          <div class="mkt-meta">
+            <span class="mkt-category">${catLabel}</span>
+            <span class="mkt-time">${timeStr}</span>
+          </div>
+          <div class="mkt-headline">${(p.headline || []).join('<br>')}</div>
+          <div class="mkt-text">${p.facebook.replace(/\n/g,'<br>').substring(0,300)}...</div>
+          <div class="mkt-actions">
+            <button class="mkt-approve" onclick="approveMktPost('${p.postId}',this)">✅ Aprobă și publică</button>
+            <button class="mkt-reject" onclick="rejectMktPost('${p.postId}',this)">❌ Respinge / Regenerează</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    wrap.innerHTML = `<div class="dash-empty">❌ ${e.message}</div>`;
+  }
+}
+
+async function approveMktPost(postId, btn) {
+  btn.classList.add('mkt-btn-loading');
+  btn.textContent = '⏳ Se publică...';
+  try {
+    const res = await fetch(`/api/dashboard/marketing/approve/${postId}`, { method:'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      const card = document.getElementById('mktCard-' + postId);
+      if (card) card.style.cssText = 'opacity:0.4;pointer-events:none;border-color:rgba(0,200,81,0.3)';
+      btn.textContent = '✅ Publicat!';
+      loadBotActivity();
+    } else {
+      btn.textContent = '❌ ' + (data.text || 'Eroare');
+      btn.classList.remove('mkt-btn-loading');
+    }
+  } catch(e) {
+    btn.textContent = '❌ Eroare';
+    btn.classList.remove('mkt-btn-loading');
+  }
+}
+
+async function rejectMktPost(postId, btn) {
+  btn.classList.add('mkt-btn-loading');
+  btn.textContent = '⏳ Se regenerează...';
+  try {
+    await fetch(`/api/dashboard/marketing/reject/${postId}`, { method:'POST' });
+    const card = document.getElementById('mktCard-' + postId);
+    if (card) card.remove();
+    setTimeout(loadPendingPosts, 8000); // reload after regeneration
+    loadBotActivity();
+  } catch {
+    btn.textContent = '❌ Respinge / Regenerează';
+    btn.classList.remove('mkt-btn-loading');
   }
 }
 
