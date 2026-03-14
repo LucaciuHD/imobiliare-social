@@ -677,7 +677,10 @@ async function runMarketingPost(forcedCategory = null) {
     }
 
   } catch (e) {
-    console.error(`[marketing] Eroare: ${e.message}`);
+    console.error(`[marketing] Eroare: ${e.message}`, e.stack);
+    if (ADMIN_CHAT_ID && BOT_TOKEN) {
+      await sendTelegram(ADMIN_CHAT_ID, `❌ Eroare generare postare marketing:\n${e.message}`).catch(() => {});
+    }
   }
 }
 
