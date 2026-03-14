@@ -319,6 +319,27 @@ async function poll() {
           } catch(e) {
             await sendTelegram(chatId, `❌ Eroare: ${e.message}`);
           }
+        } else if (cmd === "/piata") {
+          await sendTelegram(chatId, "⏳ Calculez statistici piață...");
+          try {
+            await require("./prospectingBot").sendManualStats();
+          } catch(e) {
+            await sendTelegram(chatId, `❌ Eroare: ${e.message}`);
+          }
+        } else if (cmd === "/raport") {
+          await sendTelegram(chatId, "⏳ Generez raport săptămânal...");
+          try {
+            await require("./prospectingBot").sendWeeklyReport();
+          } catch(e) {
+            await sendTelegram(chatId, `❌ Eroare: ${e.message}`);
+          }
+        } else if (cmd === "/prospecting") {
+          await sendTelegram(chatId, "⏳ Rulare monitorizare manuală...");
+          try {
+            await require("./prospectingBot").runProspecting();
+          } catch(e) {
+            await sendTelegram(chatId, `❌ Eroare: ${e.message}`);
+          }
         } else if (cmd.startsWith("/")) {
           // Ignoră comenzi necunoscute silențios (evită mesaje duble la redeploy)
         }
