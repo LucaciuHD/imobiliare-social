@@ -4,11 +4,14 @@ const cheerio = require("cheerio");
 const cron = require("node-cron");
 const store = require("./dashboardStore");
 
-const CRM_BASE = "https://simpluimobiliare.crmrebs.com/api";
-const CRM_WEB  = "https://simpluimobiliare.crmrebs.com";
-const CRM_TOKEN    = process.env.CRM_TOKEN    || "8b5b5946671da2a80fc41481760673ab2868ba99";
-const CRM_USERNAME = process.env.CRM_USERNAME || "lucadanila@simpluimobiliare.com";
-const CRM_PASSWORD = process.env.CRM_PASSWORD || "Nuamparola123!";
+const CRM_BASE      = "https://simpluimobiliare.crmrebs.com/api";
+const CRM_WEB       = "https://simpluimobiliare.crmrebs.com";
+const CRM_TOKEN     = process.env.CRM_TOKEN    || "8b5b5946671da2a80fc41481760673ab2868ba99";
+const CRM_USERNAME  = process.env.CRM_USERNAME || "lucadanila@simpluimobiliare.com";
+const CRM_PASSWORD  = process.env.CRM_PASSWORD || "Nuamparola123!";
+// Cookie de sesiune static — copiat din browser după login+2FA
+// Setează CRM_SESSION_ID în Railway (Application → Cookies → sessionid)
+const CRM_SESSION_ID = process.env.CRM_SESSION_ID || "";
 const BOT_TOKEN    = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
 
@@ -140,6 +143,11 @@ async function crmLogin() {
 // ─── Market-snapshot fetch + parse ──────────────────────────────────────────
 
 async function fetchSnapshotPage(page) {
+  // Folosește sesiunea statică din env dacă e disponibilă
+  if (CRM_SESSION_ID && !session.sessionid) {
+    session = { csrftoken: "", sessionid: CRM_SESSION_ID };
+    console.log("[prospecting] Sesiune statică CRM_SESSION_ID activată");
+  }
   if (!session.sessionid) {
     if (!(await crmLogin())) return null;
   }
@@ -156,8 +164,12 @@ async function fetchSnapshotPage(page) {
     },
     body: body.toString(),
   });
-  // sesiune expirată → re-login o singură dată
+  // sesiune expirată
   if (r.status === 403 || r.status === 302) {
+    if (CRM_SESSION_ID) {
+      console.error("[prospecting] Sesiunea CRM_SESSION_ID a expirat — actualizează variabila în Railway!");
+      return null;
+    }
     session = { csrftoken: null, sessionid: null };
     if (!(await crmLogin())) return null;
     r = await fetch(`${CRM_WEB}/market-snapshot/search/`, {
