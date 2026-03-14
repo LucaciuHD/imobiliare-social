@@ -381,18 +381,6 @@ async function generateMarketingImage(headline, category) {
   composites.push({ input: Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` + svgParts.join("") + `</svg>`) });
 
-  // Logo PNG — sus-dreapta (zonă liberă pe toate layout-urile), fundal galben ca brand-ul real
-  const logoBuffer = await getLogoBuffer();
-  if (logoBuffer) {
-    try {
-      const resized = await sharp(logoBuffer)
-        .flatten({ background: "#FFD700" })
-        .resize({ width: 210, fit: "inside" })
-        .png()
-        .toBuffer({ resolveWithObject: true });
-      composites.push({ input: resized.data, top: PAD - 10, left: W - resized.info.width - PAD });
-    } catch {}
-  }
 
   const outputPath = path.join(OVERLAY_DIR, `marketing_${Date.now()}.jpg`);
   await sharp(bg).composite(composites).jpeg({ quality: 92 }).toFile(outputPath);
