@@ -54,8 +54,10 @@ const CATEGORIES = [
 
 let _categoryIndex = 0;
 
-async function generateMarketingContent() {
-  const category = CATEGORIES[_categoryIndex % CATEGORIES.length];
+async function generateMarketingContent(forcedCategoryName = null) {
+  const category = forcedCategoryName
+    ? CATEGORIES.find(c => c.name === forcedCategoryName) || CATEGORIES[_categoryIndex % CATEGORIES.length]
+    : CATEGORIES[_categoryIndex % CATEGORIES.length];
   _categoryIndex++;
 
   const prompt = `Ești copywriter de social media pentru SIMPLU Imobiliare Craiova. Brandul are un ton bold, direct, ironic și anti-corporate — ca în exemplele de mai jos.
@@ -612,12 +614,12 @@ async function rejectPost(postId) {
   }
 }
 
-async function runMarketingPost() {
+async function runMarketingPost(forcedCategory = null) {
   try {
-    const catName = CATEGORIES[_categoryIndex % CATEGORIES.length].name;
+    const catName = forcedCategory || CATEGORIES[_categoryIndex % CATEGORIES.length].name;
     console.log(`[marketing] Generez postare... (${catName})`);
 
-    const content = await generateMarketingContent();
+    const content = await generateMarketingContent(forcedCategory);
     const imagePath = await generateMarketingImage(content.headline, content.category);
     console.log(`[marketing] Conținut și imagine generate.`);
 
@@ -656,11 +658,11 @@ async function runMarketingPost() {
   }
 }
 
-// Postează la 09:00, 13:00 și 18:00 (ora României — UTC+2)
-cron.schedule("0 7 * * *", runMarketingPost, { timezone: "Europe/Bucharest" });   // 09:00 RO
-cron.schedule("0 11 * * *", runMarketingPost, { timezone: "Europe/Bucharest" });  // 13:00 RO
-cron.schedule("0 16 * * *", runMarketingPost, { timezone: "Europe/Bucharest" });  // 18:00 RO
+// Postări zilnice cu categorii fixe (ora României)
+cron.schedule("0 10 * * *", () => runMarketingPost("brand_bold"),       { timezone: "Europe/Bucharest" }); // 10:00 — reclamă firmă
+cron.schedule("0 14 * * *", () => runMarketingPost("cumparator_witty"), { timezone: "Europe/Bucharest" }); // 14:00 — cumpărători
+cron.schedule("0 18 * * *", () => runMarketingPost("vanzator_witty"),   { timezone: "Europe/Bucharest" }); // 18:00 — vânzători
 
-console.log("📢 Marketing Bot pornit — postări la 09:00, 13:00, 18:00 (cu aprobare Telegram)");
+console.log("📢 Marketing Bot pornit — postări la 10:00 (brand), 14:00 (cumpărători), 18:00 (vânzători)");
 
 module.exports = { approvePost, rejectPost, runMarketingPost };
