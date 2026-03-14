@@ -54,12 +54,12 @@ async function fetchAllPages(path) {
 
 // Proprietăți active de vânzare în Craiova (toate sursele)
 async function fetchActiveProperties() {
-  return fetchAllPages("/properties/?availability=1&transaction_type=1&city=5708&limit=100");
+  return fetchAllPages("/properties/?availability=1&for_sale=true&limit=100");
 }
 
 // Anunțuri particulari active
 async function fetchParticularProperties() {
-  return fetchAllPages("/properties/?availability=1&transaction_type=1&city=5708&source=particular&limit=100");
+  return fetchAllPages("/properties/?availability=1&for_sale=true&source=particular&limit=100");
 }
 
 // Cereri cumpărători active
@@ -70,6 +70,8 @@ async function fetchBuyerRequests() {
 // ─── Statistici pe zone ─────────────────────────────────────────────────────
 
 function getPricePerSqm(p) {
+  // Folosim price_sqm_sale din CRM dacă există, altfel calculăm
+  if (p.price_sqm_sale && p.price_sqm_sale > 100) return Math.round(p.price_sqm_sale);
   const price = p.price_sale;
   const surface = p.surface_useable || p.surface_built;
   if (!price || !surface || surface < 10) return null;
