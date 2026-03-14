@@ -230,170 +230,149 @@ async function fetchBackgroundImage(category) {
 async function generateMarketingImage(headline, category) {
   const W = 1080, H = 1080;
   const PAD = 72;
-  const MAX_TEXT_W = W - PAD * 2;
-  const layout = _categoryIndex % 4; // 4 layout-uri distincte
-
-  const photoBuf = await fetchBackgroundImage(category || "brand_bold");
-  let bg;
-  if (photoBuf) {
-    bg = await sharp(photoBuf).resize(W, H, { fit: "cover", position: "centre" }).png().toBuffer();
-  } else {
-    bg = await sharp({ create: { width: W, height: H, channels: 4, background: { r: 17, g: 17, b: 17, alpha: 1 } } }).png().toBuffer();
-  }
+  const layout = _categoryIndex % 4;
 
   const composites = [];
-  let svgParts = [];
+  const svgParts = [];
+  const logoBuffer = await getLogoBuffer();
+  let bg;
+  let logoSpec = { invert: false, x: PAD, y: H - 170, width: 230 };
 
-  // Logo rezervă o zonă de 260x90px în colțul jos-dreapta — textul nu intră acolo
-  const LOGO_W = 240, LOGO_ZONE_H = 90;
-  // Textul footer stânga se limitează la jumătatea imaginii ca să nu colizioneze cu logo-ul
-  const FOOTER_MAX_W = Math.round(W * 0.52);
+  // Chevron decorativ ">" — SVG path
+  function chev(x, y, size, color, opacity) {
+    const half = size / 2, arm = size * 0.48;
+    const sw = Math.round(size * 0.14);
+    return `<path d="M ${x},${y} L ${x + arm},${y + half} L ${x},${y + size}" stroke="${color}" stroke-width="${sw}" fill="none" stroke-opacity="${opacity}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
 
-  // Footer: logo real al firmei, inversat alb, jos-stânga
-  async function addLogoFooter() {
-    const lb = await getLogoBuffer();
-    if (!lb) return;
-    try {
-      const resized = await sharp(lb)
-        .negate({ alpha: false })   // negru→alb, păstrăm transparența
-        .resize({ width: 220, fit: "inside" })
-        .png()
-        .toBuffer({ resolveWithObject: true });
-      composites.push({
-        input: resized.data,
-        top: H - PAD - resized.info.height,
-        left: PAD,
-      });
-    } catch (e) {
-      console.warn("[marketing] logo footer failed:", e.message);
-    }
+  // Pill (dreptunghi rotunjit) cu text centrat
+  function pill(text, cx, cy, fs, bgColor, textColor) {
+    const tw = measureTextWidth(text, fs);
+    const pw = tw + 64, ph = fs + 38;
+    const px = Math.round(cx - pw / 2), py = Math.round(cy - ph / 2);
+    return [
+      `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${Math.round(ph / 2)}" fill="${bgColor}"/>`,
+      makeTextPath(text, cx, py + Math.round(ph * 0.67), fs, textColor),
+    ].join("");
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 0 — "Cinema": gradient puternic jos, text alb mare jos-stânga
+  // LAYOUT 0 — "Brand Yellow": fundal galben, chevron alb stânga,
+  // text negru mixed-case, arrows >>>>> centru, pill alb, logo jos-centru
   // ─────────────────────────────────────────────────────────────
   if (layout === 0) {
-    composites.push({ input: Buffer.from(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#000" stop-opacity="0"/>
-          <stop offset="40%" stop-color="#000" stop-opacity="0.15"/>
-          <stop offset="100%" stop-color="#000" stop-opacity="0.88"/>
-        </linearGradient></defs>
-        <rect width="${W}" height="${H}" fill="url(#g)"/>
-      </svg>`) });
+    bg = await sharp({ create: { width: W, height: H, channels: 4, background: { r: 255, g: 215, b: 0, alpha: 1 } } }).png().toBuffer();
 
-    // Bara galbenă subțire sus — accent branding
-    svgParts.push(`<rect x="0" y="0" width="${W}" height="8" fill="#FFD700"/>`);
+    svgParts.push(chev(-110, 80, 940, "white", 0.30));
+    svgParts.push(chev(-200, 80, 940, "white", 0.13));
 
-    // Text centrat vertical în jumătatea inferioară
-    const textBase = Math.round(H * 0.72);
-    const lineSpacing = 170;
+    const uW = measureTextWidth("simpluimobiliare.com", 25);
+    svgParts.push(makeTextPathLeft("simpluimobiliare.com", W - PAD - uW, PAD + 30, 25, "#444444"));
+
+    const tx0 = 170, mw0 = W - tx0 - PAD;
+    const ls0 = Math.max(160, Math.round(H * 0.45 / Math.max(headline.length, 1)));
+    const ty0 = Math.round(H * 0.28);
     headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 164, 64);
-      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textBase + i * lineSpacing, fs, "#FFFFFF"));
+      const fs = fitFontSize(line, mw0, 138, 48);
+      svgParts.push(makeTextPathLeft(line, tx0, ty0 + i * ls0, fs, "#111111"));
     });
-    await addLogoFooter();
+
+    svgParts.push(makeTextPath(">>>>>>", W / 2 + 50, Math.round(H * 0.62), 82, "#111111"));
+    svgParts.push(pill("#alegesimplu", W / 2, Math.round(H * 0.74), 34, "white", "#111111"));
+
+    logoSpec = { invert: false, x: Math.round(W / 2 - 115), y: H - PAD - 108, width: 230 };
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 1 — "Center Stage": gradient radial întunecat în centru,
-  // text centrat pe imagine, linie galbenă sub text
+  // LAYOUT 1 — "Bold Center": fundal galben, text ALL CAPS uriaș centrat,
+  // pill alb jos, logo sus-stânga
   // ─────────────────────────────────────────────────────────────
   else if (layout === 1) {
-    composites.push({ input: Buffer.from(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-        <defs>
-          <radialGradient id="rg" cx="50%" cy="50%" r="60%">
-            <stop offset="0%" stop-color="#000" stop-opacity="0.72"/>
-            <stop offset="100%" stop-color="#000" stop-opacity="0.08"/>
-          </radialGradient>
-        </defs>
-        <rect width="${W}" height="${H}" fill="url(#rg)"/>
-      </svg>`) });
+    bg = await sharp({ create: { width: W, height: H, channels: 4, background: { r: 255, g: 215, b: 0, alpha: 1 } } }).png().toBuffer();
 
-    // Text centrat pe imagine
-    const totalLines = headline.length;
-    const lineSpacing = 160;
-    const totalH = totalLines * lineSpacing;
-    const startY = Math.round(H / 2 - totalH / 2 + lineSpacing * 0.78);
+    svgParts.push(chev(W - 170, 60, 960, "white", 0.24));
+
+    const ls1 = 185;
+    const totalH1 = (headline.length - 1) * ls1;
+    const ty1 = Math.round(H / 2 - totalH1 / 2);
     headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 148, 56);
-      svgParts.push(makeTextPath(line.toUpperCase(), W / 2, startY + i * lineSpacing, fs, "#FFFFFF"));
+      const fs = fitFontSize(line.toUpperCase(), W - PAD * 2, 168, 64);
+      svgParts.push(makeTextPath(line.toUpperCase(), W / 2, ty1 + i * ls1, fs, "#111111"));
     });
-    // Linie galbenă sub ultimul rând
-    const lastTextY = startY + (totalLines - 1) * lineSpacing + 20;
-    const lineW = Math.min(
-      fitFontSize(headline[headline.length - 1].toUpperCase(), MAX_TEXT_W, 148, 56) * headline[headline.length - 1].length * 0.55,
-      MAX_TEXT_W
-    );
-    svgParts.push(`<rect x="${Math.round((W - lineW) / 2)}" y="${lastTextY}" width="${Math.round(lineW)}" height="6" fill="#FFD700"/>`);
-    await addLogoFooter();
+
+    svgParts.push(pill("#alegesimplu", W / 2, H - 190, 32, "white", "#111111"));
+    svgParts.push(makeTextPath("0775 129 022", W / 2, H - PAD - 18, 28, "#444444"));
+
+    logoSpec = { invert: false, x: PAD, y: PAD + 8, width: 190 };
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 2 — "Bold Box": casetă semi-transparentă cu borduri galbene, centrată
+  // LAYOUT 2 — "Two Tone": galben sus 55%, alb jos 45%,
+  // text pe galben, telefon + pill pe alb, logo jos-stânga
   // ─────────────────────────────────────────────────────────────
   else if (layout === 2) {
-    composites.push({ input: Buffer.from(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#000" stop-opacity="0.2"/>
-          <stop offset="100%" stop-color="#000" stop-opacity="0.6"/>
-        </linearGradient></defs>
-        <rect width="${W}" height="${H}" fill="url(#g)"/>
-      </svg>`) });
+    bg = await sharp({ create: { width: W, height: H, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } }).png().toBuffer();
 
-    const boxPad = 48;
-    const boxX = PAD - 10;
-    const boxW = W - (PAD - 10) * 2;
-    const lineH = 158;
-    const textBlockH = headline.length * lineH;
-    const boxY = Math.round(H * 0.28);
-    const boxH = textBlockH + boxPad * 2;
+    const splitY = Math.round(H * 0.56);
+    svgParts.push(`<rect x="0" y="0" width="${W}" height="${splitY}" fill="#FFD700"/>`);
+    svgParts.push(chev(-90, 30, splitY + 80, "white", 0.28));
 
-    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="rgba(0,0,0,0.70)" rx="6"/>`);
-    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="7" fill="#FFD700" rx="3"/>`);
-    svgParts.push(`<rect x="${boxX}" y="${boxY + boxH - 7}" width="${boxW}" height="7" fill="#FFD700" rx="3"/>`);
+    const uW2 = measureTextWidth("simpluimobiliare.com", 24);
+    svgParts.push(makeTextPathLeft("simpluimobiliare.com", W - PAD - uW2, PAD + 26, 24, "#444444"));
 
-    const textStartY = boxY + boxPad + lineH * 0.78;
+    const tx2 = 160, mw2 = W - tx2 - PAD;
+    const ls2 = Math.max(150, Math.round((splitY * 0.66) / Math.max(headline.length, 1)));
+    const ty2 = Math.round(splitY * 0.24);
     headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), boxW - 80, 148, 54);
-      svgParts.push(makeTextPathLeft(line.toUpperCase(), boxX + 40, textStartY + i * lineH, fs, "#FFFFFF"));
+      const fs = fitFontSize(line, mw2, 130, 46);
+      svgParts.push(makeTextPathLeft(line, tx2, ty2 + i * ls2, fs, "#111111"));
     });
-    await addLogoFooter();
+
+    svgParts.push(`<rect x="${PAD}" y="${splitY}" width="${W - PAD * 2}" height="2" fill="#ddd"/>`);
+    svgParts.push(makeTextPath("0775 129 022", W / 2, splitY + 105, 42, "#111111"));
+    svgParts.push(pill("#alegesimplu", W / 2, splitY + 210, 32, "#FFD700", "#111111"));
+
+    logoSpec = { invert: false, x: PAD, y: splitY + 275, width: 200 };
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 3 — "Side Impact": gradient stânga→dreapta, text sus-stânga,
-  // bara galbenă verticală stânga, foto vizibil în dreapta
+  // LAYOUT 3 — "Dark Impact": fundal negru, triunghi galben sus-stânga,
+  // text alb ALL CAPS, linie galbenă, logo inversat sus-dreapta
   // ─────────────────────────────────────────────────────────────
   else {
-    composites.push({ input: Buffer.from(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="#000" stop-opacity="0.90"/>
-          <stop offset="55%" stop-color="#000" stop-opacity="0.55"/>
-          <stop offset="100%" stop-color="#000" stop-opacity="0.05"/>
-        </linearGradient></defs>
-        <rect width="${W}" height="${H}" fill="url(#g)"/>
-      </svg>`) });
+    bg = await sharp({ create: { width: W, height: H, channels: 4, background: { r: 14, g: 14, b: 14, alpha: 1 } } }).png().toBuffer();
 
-    // Bara galbenă verticală stânga
-    svgParts.push(`<rect x="0" y="0" width="10" height="${H}" fill="#FFD700"/>`);
+    svgParts.push(`<polygon points="0,0 580,0 0,500" fill="#FFD700"/>`);
+    svgParts.push(chev(W - 140, 180, 700, "white", 0.07));
 
-    const textStartY = Math.round(H * 0.22);
-    const lineSpacing = 178;
+    const ls3 = 190;
+    const totalH3 = (headline.length - 1) * ls3;
+    const ty3 = Math.round(H * 0.52 - totalH3 / 2);
     headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), Math.round(W * 0.72), 164, 60);
-      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD + 14, textStartY + i * lineSpacing, fs, "#FFFFFF"));
+      const fs = fitFontSize(line.toUpperCase(), W - PAD * 2, 168, 62);
+      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, ty3 + i * ls3, fs, "#FFFFFF"));
     });
-    await addLogoFooter();
+
+    svgParts.push(`<rect x="${PAD}" y="${ty3 + headline.length * ls3 + 16}" width="180" height="7" fill="#FFD700"/>`);
+    svgParts.push(makeTextPathLeft("simpluimobiliare.com", PAD, H - PAD - 18, 26, "rgba(255,255,255,0.38)"));
+
+    logoSpec = { invert: true, x: W - PAD - 220, y: PAD + 8, width: 210 };
   }
 
+  // SVG overlay
   composites.push({ input: Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` + svgParts.join("") + `</svg>`) });
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` + svgParts.join("") + `</svg>`
+  )});
 
+  // Logo — ultimul strat, deasupra tuturor elementelor
+  if (logoBuffer) {
+    try {
+      let p = sharp(logoBuffer).resize({ width: logoSpec.width, fit: "inside" });
+      if (logoSpec.invert) p = p.negate({ alpha: false });
+      const r = await p.png().toBuffer({ resolveWithObject: true });
+      composites.push({ input: r.data, top: logoSpec.y, left: logoSpec.x });
+    } catch (e) { console.warn("[logo]", e.message); }
+  }
 
   const outputPath = path.join(OVERLAY_DIR, `marketing_${Date.now()}.jpg`);
   await sharp(bg).composite(composites).jpeg({ quality: 92 }).toFile(outputPath);
