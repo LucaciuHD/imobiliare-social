@@ -35,7 +35,7 @@ function createLabelPng(text, pw, ph, fontSize, rx) {
   ctx.fill();
   // Black bold text centered
   ctx.fillStyle = "#111111";
-  ctx.font = `bold ${fontSize}px SimpluFont`;
+  ctx.font = `${fontSize}px SimpluFont`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, pw / 2, ph / 2 + 1);
