@@ -243,10 +243,12 @@ async function fetchSnapshotPage(page) {
 function parseSnapshotHtml(html) {
   const $ = cheerio.load(html);
   const listings = [];
+  let totalRows = 0;
 
   $("tr[data-id]").each((_i, row) => {
     const id = $(row).attr("data-id")?.trim();
     if (!id) return;
+    totalRows++;
 
     const typeText     = $(row).find(".ad-property-type-display").text().trim();
     const featuresText = $(row).find(".anunturi-features").text().replace(/\s+/g, " ").trim();
@@ -301,7 +303,7 @@ function parseSnapshotHtml(html) {
     listings.push({ id, typeText, propType, transType, surface, price, ppsm, zone, locationText, sourceUrl, hasLabel });
   });
 
-  return listings;
+  return { listings, totalRows };
 }
 
 async function fetchAllMarketSnapshot() {
@@ -310,11 +312,10 @@ async function fetchAllMarketSnapshot() {
   for (let page = 1; page <= MAX_PAGES; page++) {
     const res = await fetchSnapshotPage(page);
     if (!res?.html) break;
-    const parsed = parseSnapshotHtml(res.html);
-    if (!parsed.length) break;
+    const { listings: parsed, totalRows } = parseSnapshotHtml(res.html);
     allListings.push(...parsed);
-    console.log(`[prospecting] Pagina ${page}: ${parsed.length} anunțuri (total ${allListings.length})`);
-    if (parsed.length < 18) break; // ultima pagină
+    console.log(`[prospecting] Pagina ${page}: ${totalRows} brut, ${parsed.length} Craiova valide (total ${allListings.length})`);
+    if (totalRows < 18) break; // ultima pagină (bazat pe rânduri brute)
     await new Promise(r => setTimeout(r, 350));
   }
   console.log(`[prospecting] Total anunțuri particulare Craiova: ${allListings.length}`);
