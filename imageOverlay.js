@@ -10,7 +10,7 @@ let _logoBuffer = null;
 let _font = null;
 try {
   _font = opentype.loadSync(path.join(__dirname, "fonts", "NotoSans-Bold.ttf"));
-  console.log("[font] NotoSans-Bold loaded OK via opentype.js");
+  console.log("[font] Loaded OK");
 } catch (e) {
   console.error("[font] Failed to load font:", e.message);
 }
