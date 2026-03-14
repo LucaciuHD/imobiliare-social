@@ -249,11 +249,24 @@ async function generateMarketingImage(headline, category) {
   // Textul footer stânga se limitează la jumătatea imaginii ca să nu colizioneze cu logo-ul
   const FOOTER_MAX_W = Math.round(W * 0.52);
 
-  // Helper: footer brand în jos-stânga (comun tuturor layouturilor cu fundal întunecat)
-  function addDarkFooter() {
-    svgParts.push(`<rect x="${PAD}" y="${H - 148}" width="70" height="5" fill="#FFD700"/>`);
-    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 104, fitFontSize("SIMPLU IMOBILIARE", FOOTER_MAX_W, 36, 22), "#FFFFFF"));
-    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 62, fitFontSize("SIMPLUIMOBILIARE.COM", FOOTER_MAX_W, 22, 14), "rgba(255,255,255,0.6)"));
+  // Footer: logo real al firmei, inversat alb, jos-stânga
+  async function addLogoFooter() {
+    const lb = await getLogoBuffer();
+    if (!lb) return;
+    try {
+      const resized = await sharp(lb)
+        .negate({ alpha: false })   // negru→alb, păstrăm transparența
+        .resize({ width: 220, fit: "inside" })
+        .png()
+        .toBuffer({ resolveWithObject: true });
+      composites.push({
+        input: resized.data,
+        top: H - PAD - resized.info.height,
+        left: PAD,
+      });
+    } catch (e) {
+      console.warn("[marketing] logo footer failed:", e.message);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -280,7 +293,7 @@ async function generateMarketingImage(headline, category) {
       const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 164, 64);
       svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textBase + i * lineSpacing, fs, "#FFFFFF"));
     });
-    addDarkFooter();
+    await addLogoFooter();
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -315,7 +328,7 @@ async function generateMarketingImage(headline, category) {
       MAX_TEXT_W
     );
     svgParts.push(`<rect x="${Math.round((W - lineW) / 2)}" y="${lastTextY}" width="${Math.round(lineW)}" height="6" fill="#FFD700"/>`);
-    addDarkFooter();
+    await addLogoFooter();
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -348,7 +361,7 @@ async function generateMarketingImage(headline, category) {
       const fs = fitFontSize(line.toUpperCase(), boxW - 80, 148, 54);
       svgParts.push(makeTextPathLeft(line.toUpperCase(), boxX + 40, textStartY + i * lineH, fs, "#FFFFFF"));
     });
-    addDarkFooter();
+    await addLogoFooter();
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -375,7 +388,7 @@ async function generateMarketingImage(headline, category) {
       const fs = fitFontSize(line.toUpperCase(), Math.round(W * 0.72), 164, 60);
       svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD + 14, textStartY + i * lineSpacing, fs, "#FFFFFF"));
     });
-    addDarkFooter();
+    await addLogoFooter();
   }
 
   composites.push({ input: Buffer.from(
