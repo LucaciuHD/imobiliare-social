@@ -237,7 +237,7 @@ app.post("/api/publish/facebook", async (req, res) => {
       const postRes = await fetch(`https://graph.facebook.com/v18.0/${FB_PAGE_ID}/feed`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, attached_media: photoIds, access_token: FB_PAGE_TOKEN }),
+        body: JSON.stringify({ message, attached_media: photoIds, published: true, access_token: FB_PAGE_TOKEN }),
       });
       const postData = await postRes.json();
       if (postData.error) return res.status(400).json({ error: postData.error.message });
