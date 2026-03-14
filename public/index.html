@@ -364,6 +364,18 @@
   .dash-empty { padding:40px 20px; text-align:center; color:var(--text-dim); font-size:13px; }
   .dash-loading { padding:30px 20px; text-align:center; color:var(--text-dim); font-size:13px; }
   .last-update { font-size:11px; color:var(--text-dim); font-weight:500; padding:12px 20px; border-top:1px solid var(--border); }
+  /* ── Segment tabs ── */
+  .seg-tabs { display:flex; gap:6px; padding:14px 16px 0; flex-wrap:wrap; }
+  .seg-tab {
+    background:var(--bg3); border:1px solid var(--border);
+    color:var(--text-dim); border-radius:7px; padding:5px 13px;
+    font-size:11px; font-family:'Inter',sans-serif; font-weight:700;
+    cursor:pointer; letter-spacing:0.04em; transition:all 0.18s;
+  }
+  .seg-tab:hover { border-color:var(--yellow-border); color:var(--yellow); }
+  .seg-tab.active { background:rgba(255,215,0,0.12); border-color:var(--yellow-border); color:var(--yellow); }
+  .seg-tab-group { display:flex; gap:6px; flex-wrap:wrap; }
+  .seg-divider { width:1px; background:var(--border); margin:0 4px; }
   /* ── Bot status cards ── */
   .bot-grid {
     display:grid; grid-template-columns:repeat(2,1fr); gap:14px;
@@ -632,6 +644,19 @@
             <span class="dash-panel-title">📊 Prețuri pe cartiere — EUR/mp</span>
             <button class="dash-refresh" onclick="loadMarketStats()">↻ Actualizează</button>
           </div>
+          <div class="seg-tabs" id="segTabs" style="display:none">
+            <div class="seg-tab-group" id="transTypeTabs">
+              <button class="seg-tab active" onclick="switchSegment('sale')">Vânzări</button>
+              <button class="seg-tab" onclick="switchSegment('rent')">Închirieri</button>
+            </div>
+            <div class="seg-divider"></div>
+            <div class="seg-tab-group" id="propTypeTabs">
+              <button class="seg-tab active" onclick="switchPropType('apartment')">Apartamente</button>
+              <button class="seg-tab" onclick="switchPropType('house')">Case</button>
+              <button class="seg-tab" onclick="switchPropType('land')">Terenuri</button>
+              <button class="seg-tab" onclick="switchPropType('commercial')">Spații comerciale</button>
+            </div>
+          </div>
           <div id="zoneTableWrap"><div class="dash-loading">⏳ Se încarcă...</div></div>
           <div class="last-update" id="lastUpdate"></div>
         </div>
@@ -704,44 +729,93 @@ async function loadDashboard() {
   await Promise.all([loadMarketStats(), loadAlerts(), loadBotActivity(), loadPendingPosts()]);
 }
 
+let _marketData = null;
+let _activeTrans = 'sale';
+let _activeProp  = 'apartment';
+
+const PROP_LABEL_UI  = { apartment: 'Apartamente', house: 'Case/Vile', land: 'Terenuri', commercial: 'Spații comerciale' };
+const METRIC_LABEL   = { sale: '€/mp', rent: '€/lună' };
+
 async function loadMarketStats() {
   try {
     const res = await fetch('/api/dashboard/market');
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    _marketData = data;
 
     // KPI cards
-    document.getElementById('kpiProps').textContent = data.propCount.toLocaleString('ro-RO');
-    document.getElementById('kpiReqs').textContent = data.requestCount.toLocaleString('ro-RO');
-    const zones = Object.values(data.stats);
+    document.getElementById('kpiProps').textContent = (data.propCount || 0).toLocaleString('ro-RO');
+    document.getElementById('kpiReqs').textContent  = (data.requestCount || 0).toLocaleString('ro-RO');
 
-    // Zone table
-    const sorted = zones.sort((a, b) => b.count - a.count);
-    const maxAvg = sorted.reduce((m, z) => Math.max(m, z.avg), 0);
-    const rows = sorted.map(z => {
-      const barW = Math.round((z.avg / maxAvg) * 80);
-      return `<tr>
-        <td class="zone-name">${z.name}</td>
-        <td><div class="zone-bar-wrap"><div class="zone-bar" style="width:${barW}px"></div><span class="zone-avg">${z.avg.toLocaleString('ro-RO')}</span></div></td>
-        <td style="color:#888">${z.min.toLocaleString('ro-RO')}</td>
-        <td style="color:#888">${z.max.toLocaleString('ro-RO')}</td>
-        <td style="color:#555">${z.count}</td>
-      </tr>`;
-    }).join('');
-    document.getElementById('zoneTableWrap').innerHTML = `
-      <table class="zone-table">
-        <thead><tr><th>Cartier</th><th>Medie €/mp</th><th>Min</th><th>Max</th><th>Nr.</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`;
+    // Show/hide segment tabs
+    const hasSeg = data.segments && Object.keys(data.segments).length > 0;
+    document.getElementById('segTabs').style.display = hasSeg ? 'flex' : 'none';
+
+    renderZoneTable();
 
     // Last update
     const t = new Date(data.time);
     const partialNote = data.partial ? ' · ⚠️ Date parțiale — aștept prima rulare completă a botului (max 30 min)' : '';
     document.getElementById('lastUpdate').textContent =
-      `Actualizat la ${t.toLocaleTimeString('ro-RO', {hour:'2-digit',minute:'2-digit'})} — ${data.propCount.toLocaleString('ro-RO')} proprietăți analizate${partialNote}`;
+      `Actualizat la ${t.toLocaleTimeString('ro-RO', {hour:'2-digit',minute:'2-digit'})} — ${(data.propCount||0).toLocaleString('ro-RO')} anunțuri analizate${partialNote}`;
   } catch(e) {
     document.getElementById('zoneTableWrap').innerHTML = `<div class="dash-empty">❌ Eroare: ${e.message}</div>`;
   }
+}
+
+function renderZoneTable() {
+  const wrap = document.getElementById('zoneTableWrap');
+  if (!_marketData) return;
+
+  let zones, metricLabel;
+
+  if (_marketData.segments) {
+    const segKey = `${_activeProp}_${_activeTrans}`;
+    const segData = _marketData.segments[segKey] || {};
+    metricLabel = _activeTrans === 'sale' ? '€/mp' : '€/lună';
+    zones = Object.entries(segData).map(([name, s]) => ({ name, ...s }));
+  } else {
+    // fallback: legacy stats (apartment sale)
+    metricLabel = '€/mp';
+    zones = Object.values(_marketData.stats || {});
+  }
+
+  if (!zones.length) {
+    const label = PROP_LABEL_UI[_activeProp] || '';
+    const trans = _activeTrans === 'sale' ? 'vânzare' : 'închiriere';
+    wrap.innerHTML = `<div class="dash-empty">Fără date suficiente pentru ${label.toLowerCase()} de ${trans}.<br><span style="font-size:11px">Botul rulează la 30 min.</span></div>`;
+    return;
+  }
+
+  const sorted = zones.sort((a, b) => b.count - a.count);
+  const maxAvg = sorted.reduce((m, z) => Math.max(m, z.avg), 0);
+  const rows = sorted.map(z => {
+    const barW = Math.round((z.avg / maxAvg) * 80);
+    return `<tr>
+      <td class="zone-name">${z.name}</td>
+      <td><div class="zone-bar-wrap"><div class="zone-bar" style="width:${barW}px"></div><span class="zone-avg">${z.avg.toLocaleString('ro-RO')}</span></div></td>
+      <td style="color:#888">${z.min.toLocaleString('ro-RO')}</td>
+      <td style="color:#888">${z.max.toLocaleString('ro-RO')}</td>
+      <td style="color:#555">${z.count}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `
+    <table class="zone-table">
+      <thead><tr><th>Cartier</th><th>Medie ${metricLabel}</th><th>Min</th><th>Max</th><th>Nr.</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function switchSegment(trans) {
+  _activeTrans = trans;
+  document.querySelectorAll('#transTypeTabs .seg-tab').forEach(b => b.classList.toggle('active', b.textContent.trim() === (trans === 'sale' ? 'Vânzări' : 'Închirieri')));
+  renderZoneTable();
+}
+
+function switchPropType(prop) {
+  _activeProp = prop;
+  document.querySelectorAll('#propTypeTabs .seg-tab').forEach(b => b.classList.toggle('active', b.textContent.trim() === PROP_LABEL_UI[prop]));
+  renderZoneTable();
 }
 
 async function loadAlerts() {

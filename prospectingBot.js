@@ -1,45 +1,250 @@
 require("dotenv").config();
 const fetch = require("node-fetch");
+const cheerio = require("cheerio");
 const cron = require("node-cron");
 const store = require("./dashboardStore");
 
 const CRM_BASE = "https://simpluimobiliare.crmrebs.com/api";
-const CRM_TOKEN = process.env.CRM_TOKEN || "8b5b5946671da2a80fc41481760673ab2868ba99";
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CRM_WEB  = "https://simpluimobiliare.crmrebs.com";
+const CRM_TOKEN    = process.env.CRM_TOKEN    || "8b5b5946671da2a80fc41481760673ab2868ba99";
+const CRM_USERNAME = process.env.CRM_USERNAME || "lucadanila@simpluimobiliare.com";
+const CRM_PASSWORD = process.env.CRM_PASSWORD || "Nuamparola123!";
+const BOT_TOKEN    = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
 
-// Toate zonele Craiova din CRM
-const ZONES = {
-  526:"1 Mai", 527:"Aeroport", 528:"Bariera Vâlcii", 529:"Bordei",
-  530:"Brazda lui Novac", 531:"Brestei", 532:"Bucovăț", 533:"Calea București",
-  534:"Calea Severinului", 2247:"Central", 535:"Cernele", 536:"Ceț",
-  537:"Cornițoiu", 538:"Craiovița Nouă", 2248:"Est", 2249:"Exterior Est",
-  2250:"Exterior Nord", 2251:"Exterior Sud", 2252:"Exterior Vest", 539:"Gării",
-  540:"George Enescu", 541:"Ghercești", 542:"Lăpuș", 543:"Lăpuș Argeș",
-  544:"Lascăr Catargiu", 545:"Lunca", 546:"Matei Basarab", 547:"Mofleni",
-  548:"Nisipului", 2253:"Nord", 2254:"Nord-Est", 2255:"Nord-Vest",
-  2256:"Periferie", 549:"Plaiul Vulcănești", 550:"Popoveni", 551:"Romanești",
-  552:"Rovine", 553:"Sărari", 554:"Siloz", 555:"Sineasca", 2257:"Sud",
-  2258:"Sud-Est", 2259:"Sud-Vest", 556:"Titulescu", 2260:"Ultracentral",
-  557:"Valea Roșie", 2261:"Vest",
-};
-
-const PROP_TYPES = { 1:"Apartament", 2:"Casă", 3:"Teren", 4:"Spațiu comercial", 5:"Birou" };
-const UNDER_MARKET_THRESHOLD = 0.88; // sub 88% din medie = oportunitate
-
-// IDs deja alertate — evităm duplicate
+const UNDER_MARKET_THRESHOLD = 0.85; // 15% sub medie = oportunitate
 const alertedIds = new Set();
 
-// ─── CRM helpers ───────────────────────────────────────────────────────────────
+// ─── Sesiune CRM web (market-snapshot) ──────────────────────────────────────
+
+let session = { csrftoken: null, sessionid: null };
+
+async function crmLogin() {
+  try {
+    const loginPageRes = await fetch(`${CRM_WEB}/accounts/login/`, {
+      headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0" },
+    });
+    const html = await loginPageRes.text();
+    const csrfToken  = html.match(/name="csrfmiddlewaretoken"\s+value="([^"]+)"/)?.[1] || "";
+    const csrfCookie = (loginPageRes.headers.get("set-cookie") || "").match(/csrftoken=([^;]+)/)?.[1] || "";
+
+    const loginRes = await fetch(`${CRM_WEB}/accounts/login/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": `csrftoken=${csrfCookie}`,
+        "User-Agent": "Mozilla/5.0",
+        "Referer": `${CRM_WEB}/accounts/login/`,
+      },
+      body: new URLSearchParams({
+        csrfmiddlewaretoken: csrfToken,
+        username: CRM_USERNAME,
+        password: CRM_PASSWORD,
+        next: "/",
+      }).toString(),
+      redirect: "manual",
+    });
+
+    const rawCookies = loginRes.headers.raw?.()?.["set-cookie"] || [];
+    const cookieArr  = Array.isArray(rawCookies) ? rawCookies : [rawCookies];
+    const sessionid  = cookieArr.find(c => c.includes("sessionid="))?.match(/sessionid=([^;]+)/)?.[1];
+    const newCsrf    = cookieArr.find(c => c.includes("csrftoken="))?.match(/csrftoken=([^;]+)/)?.[1] || csrfCookie;
+
+    if (sessionid) {
+      session = { csrftoken: newCsrf, sessionid };
+      console.log("[prospecting] Login CRM reușit");
+      return true;
+    }
+    console.error("[prospecting] Login CRM eșuat — sessionid lipsă");
+    return false;
+  } catch (e) {
+    console.error("[prospecting] Login eroare:", e.message);
+    return false;
+  }
+}
+
+// ─── Market-snapshot fetch + parse ──────────────────────────────────────────
+
+async function fetchSnapshotPage(page) {
+  if (!session.sessionid) {
+    if (!(await crmLogin())) return null;
+  }
+  const body = new URLSearchParams({ all_region_obj: "18", page: String(page) });
+  let r = await fetch(`${CRM_WEB}/market-snapshot/search/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "X-Requested-With": "XMLHttpRequest",
+      "Cookie": `csrftoken=${session.csrftoken}; sessionid=${session.sessionid}`,
+      "X-CSRFToken": session.csrftoken,
+      "User-Agent": "Mozilla/5.0",
+      "Referer": `${CRM_WEB}/market-snapshot/listings/`,
+    },
+    body: body.toString(),
+  });
+  // sesiune expirată → re-login o singură dată
+  if (r.status === 403 || r.status === 302) {
+    session = { csrftoken: null, sessionid: null };
+    if (!(await crmLogin())) return null;
+    r = await fetch(`${CRM_WEB}/market-snapshot/search/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Requested-With": "XMLHttpRequest",
+        "Cookie": `csrftoken=${session.csrftoken}; sessionid=${session.sessionid}`,
+        "X-CSRFToken": session.csrftoken,
+        "User-Agent": "Mozilla/5.0",
+        "Referer": `${CRM_WEB}/market-snapshot/listings/`,
+      },
+      body: body.toString(),
+    });
+  }
+  if (!r.ok) { console.error("[prospecting] Snapshot page error:", r.status); return null; }
+  const data = await r.json();
+  return data.success ? data.response : null;
+}
+
+function parseSnapshotHtml(html) {
+  const $ = cheerio.load(html);
+  const listings = [];
+
+  $("tr[data-id]").each((_i, row) => {
+    const id = $(row).attr("data-id")?.trim();
+    if (!id) return;
+
+    const typeText     = $(row).find(".ad-property-type-display").text().trim();
+    const featuresText = $(row).find(".anunturi-features").text().replace(/\s+/g, " ").trim();
+    const tds          = $(row).find("td");
+    const locationText = $(tds[4]).text().trim();
+    const priceText    = $(tds[5]).text().trim();
+    const sourceUrl    = $(row).find(".publisher-sources-icons a").first().attr("href") || "";
+
+    // Tip tranzacție
+    const isRent = /închiriat|inchiriat/i.test(typeText);
+    const isSale = /vânzare|vanzare/i.test(typeText);
+    if (!isRent && !isSale) return;
+    const transType = isRent ? "rent" : "sale";
+
+    // Tip proprietate
+    let propType = null;
+    if (/apartament/i.test(typeText))              propType = "apartment";
+    else if (/casă|casa|vilă|vila/i.test(typeText)) propType = "house";
+    else if (/teren/i.test(typeText))               propType = "land";
+    else if (/spațiu|spatiu|comercial|birou|industrial/i.test(typeText)) propType = "commercial";
+    if (!propType) return;
+
+    // Suprafață
+    let surface = null;
+    const surfMatch = featuresText.match(/S\.[UT]\.\s*([\d,.]+)\s*mp/i);
+    if (surfMatch) surface = parseFloat(surfMatch[1].replace(/\./g, "").replace(",", "."));
+
+    // Preț
+    let price = null;
+    const priceMatch = priceText.replace(/\./g, "").match(/([\d,]+)\s*€/);
+    if (priceMatch) price = parseInt(priceMatch[1].replace(",", ""), 10);
+    if (!price || price < 100) return;
+
+    // Zonă — only Craiova listings
+    let zone = null;
+    if (locationText.includes("Craiova")) {
+      const parts = locationText.split(",").map(s => s.trim());
+      zone = (parts[0] && parts[0] !== "Craiova") ? parts[0] : "Craiova";
+    } else {
+      return; // în afara Craiovei, ignorăm
+    }
+
+    // Preț/mp (doar vânzare cu suprafață)
+    let ppsm = null;
+    if (isSale && surface && surface >= 10) {
+      ppsm = Math.round(price / surface);
+      if (ppsm < 100 || ppsm > 20000) ppsm = null;
+    }
+
+    listings.push({ id, typeText, propType, transType, surface, price, ppsm, zone, locationText, sourceUrl });
+  });
+
+  return listings;
+}
+
+async function fetchAllMarketSnapshot() {
+  const allListings = [];
+  const MAX_PAGES = 60;
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const res = await fetchSnapshotPage(page);
+    if (!res?.html) break;
+    const parsed = parseSnapshotHtml(res.html);
+    if (!parsed.length) break;
+    allListings.push(...parsed);
+    console.log(`[prospecting] Pagina ${page}: ${parsed.length} anunțuri (total ${allListings.length})`);
+    if (parsed.length < 18) break; // ultima pagină
+    await new Promise(r => setTimeout(r, 350));
+  }
+  console.log(`[prospecting] Total anunțuri particulare Craiova: ${allListings.length}`);
+  return allListings;
+}
+
+// ─── Statistici pe segmente ──────────────────────────────────────────────────
+
+const PROP_LABEL = { apartment: "Apartamente", house: "Case/Vile", land: "Terenuri", commercial: "Spații comerciale" };
+const TRANS_LABEL = { sale: "Vânzare", rent: "Închiriere" };
+
+function calculateSegmentStats(listings) {
+  // Grupare: propType_transType → zone → [prețuri]
+  const bySegZone = {};
+
+  for (const l of listings) {
+    const metric = l.transType === "sale" ? l.ppsm : l.price; // €/mp pt vânzare, €/lună pt chirie
+    if (!metric) continue;
+    const segKey = `${l.propType}_${l.transType}`;
+    if (!bySegZone[segKey]) bySegZone[segKey] = {};
+    if (!bySegZone[segKey][l.zone]) bySegZone[segKey][l.zone] = [];
+    bySegZone[segKey][l.zone].push(metric);
+  }
+
+  const segments = {};
+  for (const [segKey, zones] of Object.entries(bySegZone)) {
+    segments[segKey] = {};
+    for (const [zone, prices] of Object.entries(zones)) {
+      if (prices.length < 2) continue;
+      const sorted = [...prices].sort((a, b) => a - b);
+      const avg = Math.round(prices.reduce((s, v) => s + v, 0) / prices.length);
+      segments[segKey][zone] = { avg, min: sorted[0], max: sorted[sorted.length - 1], count: prices.length };
+    }
+  }
+  return segments;
+}
+
+// Stats backward-compatible (apartamente de vânzare) pentru dashboard
+function buildLegacyStats(segments) {
+  const aptSale = segments["apartment_sale"] || {};
+  const stats = {};
+  for (const [zone, s] of Object.entries(aptSale)) {
+    if (s.count < 2) continue;
+    stats[zone] = { name: zone, ...s };
+  }
+  return stats;
+}
+
+// ─── Detecție oportunități ───────────────────────────────────────────────────
+
+function findOpportunities(listings, segments) {
+  const opps = [];
+  for (const l of listings) {
+    if (l.transType !== "sale" || !l.ppsm) continue;
+    const seg = segments[`${l.propType}_sale`]?.[l.zone];
+    if (!seg || seg.count < 3) continue;
+    if (l.ppsm < seg.avg * UNDER_MARKET_THRESHOLD) {
+      const pctBelow = Math.round((1 - l.ppsm / seg.avg) * 100);
+      opps.push({ ...l, pctBelow, avgPpsm: seg.avg });
+    }
+  }
+  return opps;
+}
+
+// ─── CRM API: cereri cumpărători ─────────────────────────────────────────────
 
 function addToken(url) {
   return url + (url.includes("?") ? "&" : "?") + `token=${CRM_TOKEN}`;
-}
-
-async function crmFetch(path) {
-  const r = await fetch(addToken(`${CRM_BASE}${path}`));
-  if (!r.ok) throw new Error(`CRM ${path}: ${r.status}`);
-  return r.json();
 }
 
 async function fetchAllPages(path) {
@@ -55,96 +260,26 @@ async function fetchAllPages(path) {
   return results;
 }
 
-// Proprietăți active de vânzare în Craiova (toate sursele)
-async function fetchActiveProperties() {
-  return fetchAllPages("/properties/?availability=1&limit=100");
-}
-
-// Anunțuri particulari active
-async function fetchParticularProperties() {
-  return fetchAllPages("/properties/?availability=1&source=particular&limit=100");
-}
-
-// Cereri cumpărători active
 async function fetchBuyerRequests() {
   return fetchAllPages("/requests/?availability=2&city=5708&limit=100");
 }
 
-// ─── Statistici pe zone ─────────────────────────────────────────────────────
-
-function getPricePerSqm(p) {
-  // Folosim price_sqm_sale din CRM dacă există, altfel calculăm
-  if (p.price_sqm_sale && p.price_sqm_sale > 100) return Math.round(p.price_sqm_sale);
-  const price = p.price_sale;
-  const surface = p.surface_useable || p.surface_built;
-  if (!price || !surface || surface < 10) return null;
-  return Math.round(price / surface);
-}
-
-function calculateZoneStats(properties) {
-  const byZone = {};
-  for (const p of properties) {
-    const ppsm = getPricePerSqm(p);
-    if (!ppsm || ppsm < 100 || ppsm > 10000) continue; // filtrăm outlieri
-    const zoneId = p.zone;
-    if (!zoneId) continue;
-    if (!byZone[zoneId]) byZone[zoneId] = [];
-    byZone[zoneId].push(ppsm);
+function matchesBuyerRequest(listing, req) {
+  const propTypeMap = { apartment: 1, house: 2, land: 3, commercial: 4 };
+  if (req.property_type && propTypeMap[listing.propType] !== req.property_type) return false;
+  if (req.transaction_type === 2 && listing.transType !== "sale") return false;
+  if (listing.price) {
+    if (req.price_filter_gte && listing.price < req.price_filter_gte) return false;
+    if (req.price_filter_lte && listing.price > req.price_filter_lte * 1.05) return false;
   }
-
-  const stats = {};
-  for (const [zoneId, prices] of Object.entries(byZone)) {
-    if (prices.length < 2) continue; // minim 2 proprietăți pentru stats relevante
-    const sorted = [...prices].sort((a, b) => a - b);
-    const avg = Math.round(prices.reduce((s, v) => s + v, 0) / prices.length);
-    stats[zoneId] = {
-      avg,
-      min: sorted[0],
-      max: sorted[sorted.length - 1],
-      count: prices.length,
-      median: sorted[Math.floor(sorted.length / 2)],
-    };
+  if (listing.surface) {
+    if (req.surface_useable_filter_gte && listing.surface < req.surface_useable_filter_gte) return false;
+    if (req.surface_useable_filter_lte && listing.surface > req.surface_useable_filter_lte * 1.1) return false;
   }
-  return stats;
-}
-
-// ─── Matching cereri cumpărători ────────────────────────────────────────────
-
-function matchesBuyerRequest(prop, req) {
-  // Tip proprietate
-  if (req.property_type && req.property_type !== prop.property_type) return false;
-  // Tip tranzacție (req.transaction_type 2=cumpărare)
-  if (req.transaction_type === 2 && prop.transaction_type !== 1) return false;
-
-  // Preț
-  const price = prop.price_sale;
-  if (price) {
-    if (req.price_filter_gte && price < req.price_filter_gte) return false;
-    if (req.price_filter_lte && price > req.price_filter_lte * 1.05) return false; // 5% toleranță
-  }
-
-  // Suprafață
-  const surface = prop.surface_useable || prop.surface_built;
-  if (surface) {
-    if (req.surface_useable_filter_gte && surface < req.surface_useable_filter_gte) return false;
-    if (req.surface_useable_filter_lte && surface > req.surface_useable_filter_lte * 1.1) return false;
-  }
-
-  // Camere
-  if (prop.rooms) {
-    if (req.rooms_filter_gte && prop.rooms < req.rooms_filter_gte) return false;
-    if (req.rooms_filter_lte && prop.rooms > req.rooms_filter_lte) return false;
-  }
-
-  // Zonă (dacă cererea are zone specifice)
-  if (req.zone && req.zone.length > 0 && prop.zone) {
-    if (!req.zone.includes(prop.zone)) return false;
-  }
-
   return true;
 }
 
-// ─── Telegram ───────────────────────────────────────────────────────────────
+// ─── Telegram ────────────────────────────────────────────────────────────────
 
 async function sendTelegram(text, chatId = null) {
   if (!BOT_TOKEN) return;
@@ -153,262 +288,162 @@ async function sendTelegram(text, chatId = null) {
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: target,
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
-    }),
+    body: JSON.stringify({ chat_id: target, text, parse_mode: "HTML", disable_web_page_preview: true }),
   });
 }
 
-function formatProperty(p, ppsm) {
-  const zone = ZONES[p.zone] || `Zona ${p.zone}`;
-  const type = PROP_TYPES[p.property_type] || "Proprietate";
-  const surface = p.surface_useable || p.surface_built;
-  const crmUrl = `https://simpluimobiliare.crmrebs.com/properties/${p.id}`;
-  return [
-    `🏠 <b>${p.title || type}</b>`,
-    `📍 ${zone}`,
-    `💰 ${Number(p.price_sale).toLocaleString("ro-RO")} EUR${ppsm ? ` (${ppsm} EUR/mp)` : ""}`,
-    surface ? `📐 ${surface} mp | ${p.rooms || "?"} cam.` : "",
-    `🔗 <a href="${crmUrl}">Deschide în CRM</a>`,
-  ].filter(Boolean).join("\n");
-}
-
-// ─── Raport zilnic statistici pe cartiere ───────────────────────────────────
-
-async function sendZoneStatsReport(stats, properties, chatId = null) {
-  const lines = ["📊 <b>STATISTICI PIAȚĂ CRAIOVA</b>\n<i>Prețuri medii EUR/mp (vânzare)</i>\n"];
-
-  const sorted = Object.entries(stats)
-    .sort((a, b) => b[1].count - a[1].count)
-    .slice(0, 20);
-
-  for (const [zoneId, s] of sorted) {
-    const zoneName = ZONES[zoneId] || `Zona ${zoneId}`;
-    lines.push(
-      `<b>${zoneName}</b> (${s.count} prop.)\n` +
-      `  Medie: <b>${s.avg} €/mp</b> | Min: ${s.min} | Max: ${s.max}`
-    );
-  }
-
-  lines.push(`\n📅 ${new Date().toLocaleDateString("ro-RO")} — Total: ${properties.length} proprietăți analizate`);
-  await sendTelegram(lines.join("\n"), chatId);
-}
-
-// ─── Raport săptămânal trend ─────────────────────────────────────────────────
-
-async function sendWeeklyReport(chatId = null) {
-  try {
-    console.log("[prospecting] Generez raport săptămânal...");
-
-    const now = new Date();
-    const weekAgo = new Date(now - 7 * 24 * 3600 * 1000);
-    const twoWeeksAgo = new Date(now - 14 * 24 * 3600 * 1000);
-
-    const allProps = await fetchActiveProperties();
-
-    // Această săptămână vs săptămâna anterioară
-    const thisWeek = allProps.filter(p => new Date(p.date_added) >= weekAgo);
-    const prevWeek = allProps.filter(p => {
-      const d = new Date(p.date_added);
-      return d >= twoWeeksAgo && d < weekAgo;
-    });
-
-    const statsThis = calculateZoneStats(thisWeek);
-    const statsPrev = calculateZoneStats(prevWeek);
-
-    const lines = [
-      "📈 <b>RAPORT SĂPTĂMÂNAL PIAȚĂ CRAIOVA</b>",
-      `<i>${twoWeeksAgo.toLocaleDateString("ro-RO")} → ${now.toLocaleDateString("ro-RO")}</i>\n`,
-    ];
-
-    const allZones = new Set([...Object.keys(statsThis), ...Object.keys(statsPrev)]);
-    const trends = [];
-
-    for (const zoneId of allZones) {
-      const curr = statsThis[zoneId];
-      const prev = statsPrev[zoneId];
-      if (!curr) continue;
-      const zoneName = ZONES[zoneId] || `Zona ${zoneId}`;
-      let trendIcon = "→";
-      let trendPct = "";
-      if (prev) {
-        const diff = ((curr.avg - prev.avg) / prev.avg) * 100;
-        trendIcon = diff > 2 ? "📈" : diff < -2 ? "📉" : "→";
-        trendPct = ` (${diff > 0 ? "+" : ""}${diff.toFixed(1)}%)`;
-      }
-      trends.push({ zoneName, curr, prev, trendIcon, trendPct });
-    }
-
-    trends.sort((a, b) => b.curr.count - a.curr.count).slice(0, 15).forEach(t => {
-      lines.push(
-        `${t.trendIcon} <b>${t.zoneName}</b>: ${t.curr.avg} €/mp${t.trendPct}` +
-        (t.prev ? ` | prev: ${t.prev.avg} €/mp` : " | date insuficiente prev.")
-      );
-    });
-
-    lines.push(`\n🏠 Proprietăți noi săpt. aceasta: <b>${thisWeek.length}</b>`);
-    lines.push(`🏠 Proprietăți săpt. anterioară: <b>${prevWeek.length}</b>`);
-
-    const allAvgThis = Object.values(statsThis).map(s => s.avg);
-    if (allAvgThis.length > 0) {
-      const globalAvg = Math.round(allAvgThis.reduce((a, b) => a + b) / allAvgThis.length);
-      lines.push(`\n📊 Medie generală Craiova: <b>${globalAvg} €/mp</b>`);
-    }
-
-    await sendTelegram(lines.join("\n"), chatId);
-    console.log("[prospecting] Raport săptămânal trimis.");
-  } catch (e) {
-    console.error("[prospecting] Eroare raport săptămânal:", e.message);
-    await sendTelegram(`❌ Eroare raport săptămânal: ${e.message}`, chatId);
-  }
-}
-
-// ─── Task principal la 30 min ────────────────────────────────────────────────
+// ─── Task principal ───────────────────────────────────────────────────────────
 
 async function runProspecting() {
   try {
     console.log("[prospecting] Rulare monitorizare piață...");
 
-    const [allProperties, buyerRequests] = await Promise.all([
-      fetchActiveProperties(),
+    // 1. Fetch anunțuri particulare + cereri cumpărători în paralel
+    const [listings, buyerRequests] = await Promise.all([
+      fetchAllMarketSnapshot(),
       fetchBuyerRequests(),
     ]);
 
-    const stats = calculateZoneStats(allProperties);
+    // 2. Statistici pe segmente
+    const segments = calculateSegmentStats(listings);
+    const legacyStats = buildLegacyStats(segments);
 
-    // Salvează în dashboard store — acces instant din UI
-    const marketStats = {};
-    for (const [zoneId, s] of Object.entries(stats)) {
-      marketStats[zoneId] = { name: ZONES[zoneId] || `Zona ${zoneId}`, ...s };
-    }
+    // 3. Salvează în store
     store.setMarket({
-      stats: marketStats,
-      propCount: allProperties.length,
+      stats: legacyStats,         // backward compat pentru dashboard (apartamente vânzare)
+      segments,                   // date complete pe toate segmentele
+      propCount: listings.length,
       requestCount: buyerRequests.length,
       time: new Date().toISOString(),
     });
 
+    // 4. Detecție oportunități
+    const opps = findOpportunities(listings, segments);
+    let newOpps = 0, newMatches = 0;
     const alerts = [];
 
-    for (const prop of allProperties) {
-      if (alertedIds.has(prop.id)) continue;
-
-      const ppsm = getPricePerSqm(prop);
-      const zoneStats = prop.zone ? stats[prop.zone] : null;
-
-      // Alert: proprietate sub media pieței
-      if (ppsm && zoneStats && ppsm < zoneStats.avg * UNDER_MARKET_THRESHOLD) {
-        const pctBelow = Math.round((1 - ppsm / zoneStats.avg) * 100);
-        const zoneName = ZONES[prop.zone] || `Zona ${prop.zone}`;
-        alerts.push(
-          `🔥 <b>OPORTUNITATE — ${pctBelow}% sub piață!</b>\n` +
-          formatProperty(prop, ppsm) +
-          `\n📊 Media în ${zoneName}: ${zoneStats.avg} €/mp`
-        );
-        store.addAlert({
-          type: "opportunity",
-          pctBelow,
-          propId: prop.id,
-          propTitle: prop.title || PROP_TYPES[prop.property_type] || "Proprietate",
-          zone: zoneName,
-          ppsm,
-          avgPpsm: zoneStats.avg,
-          price: prop.price_sale,
-          surface: prop.surface_useable || prop.surface_built,
-          rooms: prop.rooms,
-          crmUrl: `https://simpluimobiliare.crmrebs.com/properties/${prop.id}`,
-        });
-        alertedIds.add(prop.id);
-      }
-
-      // Alert: match cu cereri cumpărători
-      const matchingRequests = buyerRequests.filter(req => matchesBuyerRequest(prop, req));
-      if (matchingRequests.length > 0 && !alertedIds.has(`match_${prop.id}`)) {
-        const reqList = matchingRequests.slice(0, 3).map(r =>
-          `  👤 <a href="https://simpluimobiliare.crmrebs.com/requests/${r.id}">${r.title || r.display_id}</a>`
-        ).join("\n");
-        alerts.push(
-          `🎯 <b>MATCH CERERE CLIENT!</b>\n` +
-          formatProperty(prop, ppsm) +
-          `\n\n<b>Potrivit pentru ${matchingRequests.length} cerere(i):</b>\n${reqList}`
-        );
-        store.addAlert({
-          type: "match",
-          propId: prop.id,
-          propTitle: prop.title || PROP_TYPES[prop.property_type] || "Proprietate",
-          zone: ZONES[prop.zone] || `Zona ${prop.zone}`,
-          ppsm,
-          price: prop.price_sale,
-          surface: prop.surface_useable || prop.surface_built,
-          rooms: prop.rooms,
-          matchCount: matchingRequests.length,
-          matches: matchingRequests.slice(0, 3).map(r => ({
-            id: r.id,
-            title: r.title || r.display_id,
-            url: `https://simpluimobiliare.crmrebs.com/requests/${r.id}`,
-          })),
-          crmUrl: `https://simpluimobiliare.crmrebs.com/properties/${prop.id}`,
-        });
-        alertedIds.add(`match_${prop.id}`);
-      }
+    for (const opp of opps) {
+      if (alertedIds.has(opp.id)) continue;
+      alertedIds.add(opp.id);
+      newOpps++;
+      const ptLabel = PROP_LABEL[opp.propType] || opp.propType;
+      alerts.push(
+        `🔥 <b>OPORTUNITATE — ${opp.pctBelow}% sub piață!</b>\n` +
+        `📍 ${opp.zone} | ${ptLabel}\n` +
+        `💰 ${opp.price.toLocaleString("ro-RO")} €${opp.surface ? ` (${opp.ppsm} €/mp)` : ""}\n` +
+        `📊 Media zonă: ${opp.avgPpsm} €/mp\n` +
+        `🔗 <a href="${opp.sourceUrl || `${CRM_WEB}/market-snapshot/view/${opp.id}/`}">Deschide anunț</a>`
+      );
+      store.addAlert({
+        type: "opportunity",
+        pctBelow: opp.pctBelow,
+        propId: opp.id,
+        propTitle: opp.typeText,
+        zone: opp.zone,
+        ppsm: opp.ppsm,
+        avgPpsm: opp.avgPpsm,
+        price: opp.price,
+        surface: opp.surface,
+        crmUrl: `${CRM_WEB}/market-snapshot/view/${opp.id}/`,
+      });
     }
 
-    const oppCount = alerts.filter(a => a.includes('OPORTUNITATE')).length;
-    const mCount = alerts.filter(a => a.includes('MATCH')).length;
-    store.updateBot('prospecting', {
+    // 5. Match-uri cereri cumpărători
+    for (const l of listings) {
+      if (alertedIds.has(`match_${l.id}`)) continue;
+      const matching = buyerRequests.filter(req => matchesBuyerRequest(l, req));
+      if (!matching.length) continue;
+      alertedIds.add(`match_${l.id}`);
+      newMatches++;
+      const reqList = matching.slice(0, 3).map(r =>
+        `  👤 <a href="${CRM_WEB}/requests/${r.id}">${r.title || r.display_id || r.id}</a>`
+      ).join("\n");
+      alerts.push(
+        `🎯 <b>MATCH CERERE CLIENT!</b>\n` +
+        `📍 ${l.zone} | ${PROP_LABEL[l.propType] || l.propType}\n` +
+        `💰 ${l.price.toLocaleString("ro-RO")} €\n` +
+        `<b>${matching.length} cerere(i) potrivite:</b>\n${reqList}\n` +
+        `🔗 <a href="${CRM_WEB}/market-snapshot/view/${l.id}/">Anunț particular</a>`
+      );
+      store.addAlert({
+        type: "match",
+        propId: l.id,
+        propTitle: l.typeText,
+        zone: l.zone,
+        price: l.price,
+        surface: l.surface,
+        matchCount: matching.length,
+        matches: matching.slice(0, 3).map(r => ({
+          id: r.id,
+          title: r.title || r.display_id || String(r.id),
+          url: `${CRM_WEB}/requests/${r.id}`,
+        })),
+        crmUrl: `${CRM_WEB}/market-snapshot/view/${l.id}/`,
+      });
+    }
+
+    // 6. Actualizează store bot activity
+    store.updateBot("prospecting", {
       lastRun: new Date().toISOString(),
-      lastStatus: 'ok',
+      lastStatus: "ok",
       lastError: null,
       scans: store.botActivity.prospecting.scans + 1,
-      opportunitiesFound: store.botActivity.prospecting.opportunitiesFound + oppCount,
-      matchesFound: store.botActivity.prospecting.matchesFound + mCount,
+      opportunitiesFound: store.botActivity.prospecting.opportunitiesFound + newOpps,
+      matchesFound: store.botActivity.prospecting.matchesFound + newMatches,
     });
 
     if (alerts.length > 0) {
-      console.log(`[prospecting] ${alerts.length} alerte noi`);
-      for (const alert of alerts) {
-        await sendTelegram(alert);
-        await new Promise(r => setTimeout(r, 500)); // pauză între mesaje
+      console.log(`[prospecting] ${alerts.length} alerte noi (${newOpps} opp, ${newMatches} match)`);
+      for (const a of alerts) {
+        await sendTelegram(a);
+        await new Promise(r => setTimeout(r, 500));
       }
     } else {
       console.log("[prospecting] Nicio alertă nouă.");
     }
 
-    // Curăță alertedIds dacă devine prea mare (reține maxim 5000 IDs)
-    if (alertedIds.size > 5000) alertedIds.clear();
+    if (alertedIds.size > 10000) alertedIds.clear();
 
   } catch (e) {
     console.error("[prospecting] Eroare:", e.message);
-    store.updateBot('prospecting', { lastStatus: 'error', lastError: e.message });
+    store.updateBot("prospecting", { lastStatus: "error", lastError: e.message });
     await sendTelegram(`❌ Eroare prospecting: ${e.message}`).catch(() => {});
   }
 }
 
-// ─── Comandă manuală: statistici la cerere ──────────────────────────────────
+// ─── Raport săptămânal ───────────────────────────────────────────────────────
 
-async function sendManualStats(chatId = null) {
+async function sendWeeklyReport(chatId = null) {
   try {
-    const properties = await fetchActiveProperties();
-    const stats = calculateZoneStats(properties);
-    await sendZoneStatsReport(stats, properties, chatId);
+    if (!store.market?.segments) {
+      await sendTelegram("⏳ Datele de piață nu sunt încă disponibile. Rulează mai întâi o scanare.", chatId);
+      return;
+    }
+    const aptSale = store.market.segments["apartment_sale"] || {};
+    const lines = ["📈 <b>RAPORT SĂPTĂMÂNAL PIAȚĂ CRAIOVA</b>\n<i>Apartamente de vânzare — €/mp</i>\n"];
+    Object.entries(aptSale)
+      .filter(([, s]) => s.count >= 3)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 20)
+      .forEach(([zone, s]) => {
+        lines.push(`<b>${zone}</b> (${s.count}): <b>${s.avg} €/mp</b> | ${s.min}–${s.max}`);
+      });
+    lines.push(`\n🏠 Total anunțuri analizate: ${store.market.propCount}`);
+    await sendTelegram(lines.join("\n"), chatId);
   } catch (e) {
-    await sendTelegram(`❌ Eroare statistici: ${e.message}`, chatId);
+    await sendTelegram(`❌ Eroare raport: ${e.message}`, chatId);
   }
 }
 
-// ─── Cron schedules ─────────────────────────────────────────────────────────
+async function sendManualStats(chatId = null) {
+  await sendWeeklyReport(chatId);
+}
 
-// Monitorizare la fiecare 30 de minute
+// ─── Cron ────────────────────────────────────────────────────────────────────
+
 cron.schedule("*/30 * * * *", runProspecting, { timezone: "Europe/Bucharest" });
-
-// Statistici zilnice dimineața la 9:00
-cron.schedule("0 9 * * *", sendManualStats, { timezone: "Europe/Bucharest" });
-
-// Raport săptămânal luni la 8:00
-cron.schedule("0 8 * * 1", sendWeeklyReport, { timezone: "Europe/Bucharest" });
+cron.schedule("0 9 * * *",   sendManualStats,  { timezone: "Europe/Bucharest" });
+cron.schedule("0 8 * * 1",   sendWeeklyReport, { timezone: "Europe/Bucharest" });
 
 console.log("🔍 Prospecting Bot pornit — monitorizare la 30 min, stats zilnice 9:00, raport luni 8:00");
 
