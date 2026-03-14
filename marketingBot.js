@@ -244,8 +244,13 @@ async function generateMarketingImage(headline, category) {
   const composites = [];
   let svgParts = [];
 
+  // Logo rezervă o zonă de 260x90px în colțul jos-dreapta — textul nu intră acolo
+  const LOGO_W = 240, LOGO_ZONE_H = 90;
+  // Textul footer stânga se limitează la jumătatea imaginii ca să nu colizioneze cu logo-ul
+  const FOOTER_MAX_W = Math.round(W * 0.52);
+
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 0 — "Cinema": gradient jos puternic, text mare jos-stânga, bara galbenă sus
+  // LAYOUT 0 — "Cinema": gradient jos, text mare centru-stânga, bara galbenă sus
   // ─────────────────────────────────────────────────────────────
   if (layout === 0) {
     composites.push({ input: Buffer.from(
@@ -259,44 +264,44 @@ async function generateMarketingImage(headline, category) {
       </svg>`) });
 
     svgParts.push(`<rect x="0" y="0" width="${W}" height="10" fill="#FFD700"/>`);
-    const textStart = H * 0.44;
+    const textStart = H * 0.42;
     headline.forEach((line, i) => {
       const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 172, 68);
       svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textStart + i * 178, fs, "#FFFFFF"));
     });
-    svgParts.push(`<rect x="${PAD}" y="${H - 168}" width="100" height="6" fill="#FFD700"/>`);
-    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 120, fitFontSize("SIMPLU IMOBILIARE", 500, 44, 26), "#FFD700"));
-    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 72, fitFontSize("SIMPLUIMOBILIARE.COM", 420, 26, 16), "#aaaaaa"));
+    // Footer stânga — lățime limitată să nu ajungă la logo
+    svgParts.push(`<rect x="${PAD}" y="${H - 162}" width="80" height="6" fill="#FFD700"/>`);
+    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 114, fitFontSize("SIMPLU IMOBILIARE", FOOTER_MAX_W, 40, 24), "#FFD700"));
+    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 68, fitFontSize("SIMPLUIMOBILIARE.COM", FOOTER_MAX_W, 24, 16), "#aaaaaa"));
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 1 — "Split": foto sus 55%, bandă galbenă jos 45%, text negru pe galben
+  // LAYOUT 1 — "Split": foto sus 52%, bandă galbenă jos 48%
+  // Logo integrat în banda galbenă (nu separat) — fără suprapunere
   // ─────────────────────────────────────────────────────────────
   else if (layout === 1) {
-    const yBand = Math.round(H * 0.55);
+    const yBand = Math.round(H * 0.52);
     composites.push({ input: Buffer.from(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
         <rect x="0" y="${yBand}" width="${W}" height="${H - yBand}" fill="#FFD700"/>
       </svg>`) });
 
-    // "SIMPLU IMOBILIARE" mic în colțul din stânga sus al benzii galbene
-    const brandSize = fitFontSize("SIMPLU IMOBILIARE", 340, 30, 18);
-    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, yBand + 36, brandSize, "#111111"));
-
-    // Linie subțire separator
-    svgParts.push(`<rect x="${PAD}" y="${yBand + 48}" width="${W - PAD * 2}" height="3" fill="rgba(0,0,0,0.2)"/>`);
-
-    // Headline mare — headline[0] și [1] în banda galbenă
-    const textStart = yBand + 100;
-    const lineH = Math.round((H - yBand - 130) / Math.max(headline.length, 1));
+    // Headline în banda galbenă, text negru, limitat la lățimea totală
+    const availH = H - yBand - 120; // lasă 120px sus pentru brand
+    const lineH = Math.round(availH / Math.max(headline.length, 1));
+    const textStart = yBand + 120;
     headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, 148, 56);
-      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textStart + i * lineH + fs * 0.82, fs, "#111111"));
+      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W, Math.min(lineH - 10, 148), 48);
+      svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD, textStart + i * lineH, fs, "#111111"));
     });
+    // Brand mic sus în banda galbenă
+    svgParts.push(`<rect x="${PAD}" y="${yBand + 22}" width="60" height="5" fill="#111111"/>`);
+    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, yBand + 64, fitFontSize("SIMPLU IMOBILIARE", FOOTER_MAX_W, 32, 20), "#111111"));
+    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, yBand + 94, fitFontSize("SIMPLUIMOBILIARE.COM", FOOTER_MAX_W, 22, 14), "rgba(0,0,0,0.55)"));
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 2 — "Bold Box": casetă neagră semitransparentă în mijloc cu text
+  // LAYOUT 2 — "Bold Box": casetă neagră în mijloc cu text, logo jos-dreapta
   // ─────────────────────────────────────────────────────────────
   else if (layout === 2) {
     composites.push({ input: Buffer.from(
@@ -308,70 +313,68 @@ async function generateMarketingImage(headline, category) {
         <rect width="${W}" height="${H}" fill="url(#g)"/>
       </svg>`) });
 
-    // Casetă neagră cu margini galbene
-    const boxX = PAD - 20, boxY = Math.round(H * 0.28);
+    const boxX = PAD - 20, boxY = Math.round(H * 0.26);
     const boxW = W - (PAD - 20) * 2;
-    const boxH = Math.round(H * 0.44);
-    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="rgba(0,0,0,0.75)" rx="4"/>`);
-    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="6" fill="#FFD700" rx="0"/>`);
-    svgParts.push(`<rect x="${boxX}" y="${boxY + boxH - 6}" width="${boxW}" height="6" fill="#FFD700" rx="0"/>`);
+    const boxH = Math.round(H * 0.46);
+    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="rgba(0,0,0,0.78)" rx="4"/>`);
+    svgParts.push(`<rect x="${boxX}" y="${boxY}" width="${boxW}" height="6" fill="#FFD700"/>`);
+    svgParts.push(`<rect x="${boxX}" y="${boxY + boxH - 6}" width="${boxW}" height="6" fill="#FFD700"/>`);
 
     const textCenterY = boxY + boxH / 2;
-    const totalTextH = headline.length * 170;
+    const totalTextH = headline.length * 168;
     headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), boxW - 60, 160, 62);
-      const y = textCenterY - totalTextH / 2 + i * 170 + fs * 0.72;
-      svgParts.push(makeTextPathLeft(line.toUpperCase(), boxX + 30, y, fs, "#FFFFFF"));
+      const fs = fitFontSize(line.toUpperCase(), boxW - 80, 158, 58);
+      const y = textCenterY - totalTextH / 2 + i * 168 + fs * 0.72;
+      svgParts.push(makeTextPathLeft(line.toUpperCase(), boxX + 40, y, fs, "#FFFFFF"));
     });
 
-    // Footer jos
-    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 110, fitFontSize("SIMPLU IMOBILIARE", 480, 42, 24), "#FFD700"));
-    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 62, fitFontSize("SIMPLUIMOBILIARE.COM", 380, 26, 16), "#aaaaaa"));
+    // Footer stânga — limitat să nu atingă logo-ul
+    svgParts.push(`<rect x="${PAD}" y="${H - 152}" width="70" height="5" fill="#FFD700"/>`);
+    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD, H - 106, fitFontSize("SIMPLU IMOBILIARE", FOOTER_MAX_W, 40, 24), "#FFD700"));
+    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD, H - 62, fitFontSize("SIMPLUIMOBILIARE.COM", FOOTER_MAX_W, 24, 16), "#aaaaaa"));
   }
 
   // ─────────────────────────────────────────────────────────────
-  // LAYOUT 3 — "Neon": gradient diagonal, text top + bara galbenă laterală
+  // LAYOUT 3 — "Neon": gradient diagonal, text sus, bara galbenă stânga
   // ─────────────────────────────────────────────────────────────
   else {
     composites.push({ input: Buffer.from(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
         <defs><linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0%" stop-color="#000" stop-opacity="0.9"/>
-          <stop offset="55%" stop-color="#000" stop-opacity="0.5"/>
+          <stop offset="0%" stop-color="#000" stop-opacity="0.92"/>
+          <stop offset="60%" stop-color="#000" stop-opacity="0.55"/>
           <stop offset="100%" stop-color="#000" stop-opacity="0.1"/>
         </linearGradient></defs>
         <rect width="${W}" height="${H}" fill="url(#g)"/>
       </svg>`) });
 
-    // Bara galbenă verticală stânga
     svgParts.push(`<rect x="0" y="0" width="12" height="${H}" fill="#FFD700"/>`);
-
-    const textStart = Math.round(H * 0.12);
+    const textStart = Math.round(H * 0.14);
     const lineH = 180;
     headline.forEach((line, i) => {
-      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W - 40, 175, 66);
+      const fs = fitFontSize(line.toUpperCase(), MAX_TEXT_W - 40, 172, 64);
       svgParts.push(makeTextPathLeft(line.toUpperCase(), PAD + 20, textStart + i * lineH, fs, "#FFFFFF"));
     });
 
-    // Linie + brand jos
-    svgParts.push(`<rect x="${PAD + 20}" y="${H - 178}" width="80" height="6" fill="#FFD700"/>`);
-    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD + 20, H - 120, fitFontSize("SIMPLU IMOBILIARE", 480, 44, 26), "#FFD700"));
-    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD + 20, H - 70, fitFontSize("SIMPLUIMOBILIARE.COM", 380, 26, 16), "#aaaaaa"));
+    // Footer stânga — limitat
+    svgParts.push(`<rect x="${PAD + 20}" y="${H - 162}" width="70" height="6" fill="#FFD700"/>`);
+    svgParts.push(makeTextPathLeft("SIMPLU IMOBILIARE", PAD + 20, H - 114, fitFontSize("SIMPLU IMOBILIARE", FOOTER_MAX_W, 40, 24), "#FFD700"));
+    svgParts.push(makeTextPathLeft("SIMPLUIMOBILIARE.COM", PAD + 20, H - 68, fitFontSize("SIMPLUIMOBILIARE.COM", FOOTER_MAX_W, 24, 16), "#aaaaaa"));
   }
 
   composites.push({ input: Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` + svgParts.join("") + `</svg>`) });
 
-  // Logo PNG — cu fundal galben (#FFD700) ca în identitatea vizuală a firmei
+  // Logo PNG — sus-dreapta (zonă liberă pe toate layout-urile), fundal galben ca brand-ul real
   const logoBuffer = await getLogoBuffer();
   if (logoBuffer) {
     try {
       const resized = await sharp(logoBuffer)
-        .flatten({ background: "#FFD700" })   // fundal galben, elemente negre
-        .resize({ width: 220, fit: "inside" })
+        .flatten({ background: "#FFD700" })
+        .resize({ width: 210, fit: "inside" })
         .png()
         .toBuffer({ resolveWithObject: true });
-      composites.push({ input: resized.data, top: H - resized.info.height - 48, left: W - resized.info.width - PAD });
+      composites.push({ input: resized.data, top: PAD - 10, left: W - resized.info.width - PAD });
     } catch {}
   }
 
