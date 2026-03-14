@@ -359,6 +359,13 @@
   }
   .alert-link:hover { text-decoration:underline; }
   .alert-time { font-size:10px; color:var(--text-dim); margin-top:4px; font-weight:500; }
+  .alert-dismiss {
+    display:inline-block; margin-top:8px; margin-left:10px;
+    font-size:11px; font-weight:700; font-family:'Inter',sans-serif;
+    color:#4CAF50; background:rgba(76,175,80,0.1); border:1px solid rgba(76,175,80,0.25);
+    border-radius:6px; padding:3px 10px; cursor:pointer; transition:all 0.18s;
+  }
+  .alert-dismiss:hover { background:rgba(76,175,80,0.2); }
   .alert-matches { margin-top:6px; }
   .alert-match-item { font-size:11px; color:#7eb8f7; }
   .dash-empty { padding:40px 20px; text-align:center; color:var(--text-dim); font-size:13px; }
@@ -850,6 +857,7 @@ async function loadAlerts() {
             ${meta}
           </div>
           <a class="alert-link" href="${a.crmUrl}" target="_blank">↗ Deschide în CRM</a>
+          <button class="alert-dismiss" onclick="dismissAlert('${a.propId}', this)">✓ Am preluat</button>
           <div class="alert-time">${timeStr}</div>
         </div>`;
       } else {
@@ -865,12 +873,38 @@ async function loadAlerts() {
           </div>
           <div class="alert-matches">${matchLinks}</div>
           <a class="alert-link" href="${a.crmUrl}" target="_blank">↗ Deschide în CRM</a>
+          <button class="alert-dismiss" onclick="dismissAlert('${a.propId}', this)">✓ Am preluat</button>
           <div class="alert-time">${timeStr}</div>
         </div>`;
       }
     }).join('');
   } catch(e) {
     document.getElementById('alertFeed').innerHTML = `<div class="dash-empty">❌ ${e.message}</div>`;
+  }
+}
+
+async function dismissAlert(propId, btn) {
+  btn.disabled = true;
+  btn.textContent = '✓ Preluat';
+  btn.style.opacity = '0.5';
+  try {
+    await fetch(`/api/dashboard/alerts/${propId}/dismiss`, { method: 'POST' });
+    const item = btn.closest('.alert-item');
+    item.style.transition = 'opacity 0.3s';
+    item.style.opacity = '0';
+    setTimeout(() => { item.remove(); updateAlertsKpi(); }, 320);
+  } catch(e) { btn.disabled = false; btn.textContent = '✓ Am preluat'; btn.style.opacity = '1'; }
+}
+
+function updateAlertsKpi() {
+  const count = document.querySelectorAll('#alertFeed .alert-item').length;
+  document.getElementById('kpiAlerts').textContent = count;
+  if (count === 0) {
+    document.getElementById('alertFeed').innerHTML = `<div class="dash-empty">
+      <div style="font-size:28px;margin-bottom:8px">🔍</div>
+      Nicio alertă încă.<br>
+      <span style="font-size:11px">Botul de prospecting rulează la fiecare 30 min.</span>
+    </div>`;
   }
 }
 

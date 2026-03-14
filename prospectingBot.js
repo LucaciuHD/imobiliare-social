@@ -2,7 +2,8 @@ require("dotenv").config();
 const fetch = require("node-fetch");
 const cheerio = require("cheerio");
 const cron = require("node-cron");
-const store = require("./dashboardStore");
+const store     = require("./dashboardStore");
+const dismissed = require("./dismissedStore");
 
 const CRM_BASE = "https://simpluimobiliare.crmrebs.com/api";
 const CRM_WEB  = "https://simpluimobiliare.crmrebs.com";
@@ -323,7 +324,7 @@ async function runProspecting() {
     const alerts = [];
 
     for (const opp of opps) {
-      if (alertedIds.has(opp.id)) continue;
+      if (alertedIds.has(opp.id) || dismissed.has(opp.id)) continue;
       alertedIds.add(opp.id);
       newOpps++;
       const ptLabel = PROP_LABEL[opp.propType] || opp.propType;
@@ -350,7 +351,7 @@ async function runProspecting() {
 
     // 5. Match-uri cereri cumpărători
     for (const l of listings) {
-      if (alertedIds.has(`match_${l.id}`)) continue;
+      if (alertedIds.has(`match_${l.id}`) || dismissed.has(l.id)) continue;
       const matching = buyerRequests.filter(req => matchesBuyerRequest(l, req));
       if (!matching.length) continue;
       alertedIds.add(`match_${l.id}`);

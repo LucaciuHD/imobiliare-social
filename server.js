@@ -8,7 +8,8 @@ const fs = require("fs");
 const crypto = require("crypto");
 const { generateHighlights, applyOverlayToImage } = require("./imageOverlay");
 const FormData = require("form-data");
-const store = require("./dashboardStore");
+const store     = require("./dashboardStore");
+const dismissed = require("./dismissedStore");
 const postQueue = require("./postQueue");
 // Bot modules — încărcate o singură dată (Node cache previne duplicate cron)
 const { approvePost: mktApprove, rejectPost: mktReject, runMarketingPost } = require("./marketingBot");
@@ -461,9 +462,18 @@ app.get("/api/dashboard/market", async (req, res) => {
   }
 });
 
-// GET recent alerts (from in-memory store)
+// GET recent alerts — filtrează proprietățile deja preluate
 app.get("/api/dashboard/alerts", (req, res) => {
-  res.json(store.alerts);
+  res.json(store.alerts.filter(a => !dismissed.has(a.propId)));
+});
+
+// POST dismiss alert — marchează proprietatea ca preluată
+app.post("/api/dashboard/alerts/:propId/dismiss", (req, res) => {
+  const { propId } = req.params;
+  dismissed.add(propId);
+  // Scoate alertele acestei proprietăți din store
+  store.alerts = store.alerts.filter(a => a.propId !== propId);
+  res.json({ ok: true });
 });
 
 // GET bot activity (status + stats per bot)
