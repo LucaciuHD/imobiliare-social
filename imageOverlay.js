@@ -6,13 +6,11 @@ const { createCanvas, GlobalFonts } = require("@napi-rs/canvas");
 const LOGO_URL = "https://media.crmrebs.com/agencies/simpluimobiliare/logo/df1af06e-4181-4a4f-bded-cae60a80194c/Logo_Simplu_Imobiliare-01.png";
 let _logoBuffer = null;
 
-// On Linux (Railway) Arial doesn't exist — register NotoSans from bundled font file
-if (process.platform !== "win32") {
-  try {
-    GlobalFonts.registerFromPath(path.join(__dirname, "fonts", "NotoSans-Bold.ttf"), "Arial");
-  } catch (e) {
-    console.error("Font register failed:", e.message);
-  }
+// Register bundled font under unique name — works on both Windows and Linux
+try {
+  GlobalFonts.registerFromPath(path.join(__dirname, "fonts", "NotoSans-Bold.ttf"), "SimpluFont");
+} catch (e) {
+  console.error("Font register failed:", e.message);
 }
 
 function createLabelPng(text, pw, ph, fontSize, rx) {
@@ -34,7 +32,7 @@ function createLabelPng(text, pw, ph, fontSize, rx) {
   ctx.fill();
   // Black bold text centered
   ctx.fillStyle = "#111111";
-  ctx.font = `bold ${fontSize}px Arial`;
+  ctx.font = `bold ${fontSize}px SimpluFont`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, pw / 2, ph / 2 + 1);
