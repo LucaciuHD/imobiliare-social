@@ -7,12 +7,15 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const opentype = require("opentype.js");
+const crypto = require("crypto");
+const postQueue = require("./postQueue");
 
 const FB_PAGE_TOKEN = process.env.FB_PAGE_TOKEN;
 const FB_PAGE_ID = process.env.FB_PAGE_ID;
 const IG_ACCOUNT_ID = process.env.IG_ACCOUNT_ID;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_KEY;
-// Railway sets RAILWAY_PUBLIC_DOMAIN automatically (e.g. "myapp.up.railway.app")
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
 const PUBLIC_URL = process.env.PUBLIC_URL ||
   (process.env.RAILWAY_PUBLIC_DOMAIN ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN : null);
 
@@ -95,7 +98,7 @@ REGULI instagram:
   if (!text) throw new Error("No content from Claude");
 
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("Invalid JSON from Claude: " + text.substring(0, 200));
+  if (!match) throw new Error("Invalid JSON from Claude");
   const content = JSON.parse(match[0]);
 
   return {
@@ -143,14 +146,12 @@ async function generateMarketingImage(headline) {
   const W = 1080, H = 1080;
   const cx = W / 2;
 
-  // Dark navy background
   const bg = await sharp({
     create: { width: W, height: H, channels: 4, background: { r: 13, g: 27, b: 42, alpha: 1 } }
   }).png().toBuffer();
 
   const composites = [];
 
-  // Logo centered in upper half
   const logoBuffer = await getLogoBuffer();
   if (logoBuffer) {
     const resized = await sharp(logoBuffer)
@@ -163,7 +164,6 @@ async function generateMarketingImage(headline) {
     });
   }
 
-  // Headline text — 3 lines in lower half
   const fontSize = 74;
   const lineSpacing = 108;
   const textStartY = 620;
@@ -172,28 +172,21 @@ async function generateMarketingImage(headline) {
     textPaths += makeTextPath(line, cx, textStartY + i * lineSpacing, fontSize, "#FFFFFF");
   });
 
-  // Tagline bottom
   const tagline = makeTextPath("SIMPLUIMOBILIARE.COM", cx, 1010, 34, "#FFD700");
 
-  // SVG overlay: golden strips + semi-transparent bar + text
   const svgOverlay = Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
     `<rect x="0" y="0" width="${W}" height="16" fill="#FFD700"/>` +
     `<rect x="0" y="${H - 16}" width="${W}" height="16" fill="#FFD700"/>` +
     `<rect x="0" y="${H - 70}" width="${W}" height="54" fill="rgba(0,0,0,0.55)"/>` +
-    textPaths +
-    tagline +
+    textPaths + tagline +
     `</svg>`
   );
 
   composites.push({ input: svgOverlay });
 
   const outputPath = path.join(OVERLAY_DIR, `marketing_${Date.now()}.jpg`);
-  await sharp(bg)
-    .composite(composites)
-    .jpeg({ quality: 92 })
-    .toFile(outputPath);
-
+  await sharp(bg).composite(composites).jpeg({ quality: 92 }).toFile(outputPath);
   return outputPath;
 }
 
@@ -204,9 +197,7 @@ async function uploadPhotoToFacebook(imagePath, caption) {
   form.append("published", "true");
   form.append("access_token", FB_PAGE_TOKEN);
   const r = await fetch(`https://graph.facebook.com/v18.0/${FB_PAGE_ID}/photos`, {
-    method: "POST",
-    body: form,
-    headers: form.getHeaders(),
+    method: "POST", body: form, headers: form.getHeaders(),
   });
   const d = await r.json();
   if (d.error) throw new Error(d.error.message);
@@ -214,22 +205,86 @@ async function uploadPhotoToFacebook(imagePath, caption) {
 }
 
 async function postToInstagram(imagePublicUrl, caption) {
-  const containerRes = await fetch(`https://graph.facebook.com/v18.0/${IG_ACCOUNT_ID}/media`, {
+  const cRes = await fetch(`https://graph.facebook.com/v18.0/${IG_ACCOUNT_ID}/media`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image_url: imagePublicUrl, caption, access_token: FB_PAGE_TOKEN }),
   });
-  const container = await containerRes.json();
+  const container = await cRes.json();
   if (container.error) throw new Error("IG container: " + container.error.message);
 
-  const publishRes = await fetch(`https://graph.facebook.com/v18.0/${IG_ACCOUNT_ID}/media_publish`, {
+  const pRes = await fetch(`https://graph.facebook.com/v18.0/${IG_ACCOUNT_ID}/media_publish`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ creation_id: container.id, access_token: FB_PAGE_TOKEN }),
   });
-  const published = await publishRes.json();
+  const published = await pRes.json();
   if (published.error) throw new Error("IG publish: " + published.error.message);
   return published.id;
+}
+
+async function publishPost(postId) {
+  const post = postQueue.get(postId);
+  if (!post) throw new Error("Post not found: " + postId);
+
+  const fbId = await uploadPhotoToFacebook(post.imagePath, post.facebook);
+  console.log(`[marketing] Facebook OK! ID: ${fbId}`);
+
+  if (PUBLIC_URL && IG_ACCOUNT_ID) {
+    const filename = path.basename(post.imagePath);
+    const igId = await postToInstagram(`${PUBLIC_URL}/overlays/${filename}`, post.instagram);
+    console.log(`[marketing] Instagram OK! ID: ${igId}`);
+  }
+
+  postQueue.delete(postId);
+  setTimeout(() => { try { fs.unlinkSync(post.imagePath); } catch {} }, 5000);
+}
+
+async function sendTelegramPreview(imagePath, post, postId) {
+  const caption = [
+    `📋 <b>PREVIZUALIZARE POSTARE</b>`,
+    `📂 Categorie: ${post.category}`,
+    `🏷 Headline: <i>${post.headline.join(" | ")}</i>`,
+    ``,
+    `<b>Facebook preview:</b>`,
+    post.facebook.substring(0, 400) + (post.facebook.length > 400 ? "..." : ""),
+  ].join("\n");
+
+  const form = new FormData();
+  form.append("chat_id", String(ADMIN_CHAT_ID));
+  form.append("photo", fs.createReadStream(imagePath), { filename: "preview.jpg", contentType: "image/jpeg" });
+  form.append("caption", caption.substring(0, 1024));
+  form.append("parse_mode", "HTML");
+  form.append("reply_markup", JSON.stringify({
+    inline_keyboard: [[
+      { text: "✅ Aprobă și publică", callback_data: `mkt_ok_${postId}` },
+      { text: "❌ Respinge", callback_data: `mkt_no_${postId}` },
+    ]]
+  }));
+
+  const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+    method: "POST", body: form, headers: form.getHeaders(),
+  });
+  return r.json();
+}
+
+// Called by bot.js when admin approves
+async function approvePost(postId, chatId) {
+  try {
+    await publishPost(postId);
+    return { ok: true, text: "✅ Postarea a fost publicată pe Facebook și Instagram!" };
+  } catch (e) {
+    return { ok: false, text: "❌ Eroare la publicare: " + e.message };
+  }
+}
+
+// Called by bot.js when admin rejects
+function rejectPost(postId) {
+  const post = postQueue.get(postId);
+  if (post) {
+    setTimeout(() => { try { fs.unlinkSync(post.imagePath); } catch {} }, 1000);
+    postQueue.delete(postId);
+  }
 }
 
 async function runMarketingPost() {
@@ -238,26 +293,38 @@ async function runMarketingPost() {
     console.log(`[marketing] Generez postare... (${catName})`);
 
     const content = await generateMarketingContent();
-    console.log(`[marketing] Conținut generat. Headline: ${content.headline.join(" | ")}`);
-
     const imagePath = await generateMarketingImage(content.headline);
-    console.log(`[marketing] Imagine generată.`);
+    console.log(`[marketing] Conținut și imagine generate.`);
 
-    // Facebook
-    const fbId = await uploadPhotoToFacebook(imagePath, content.facebook);
-    console.log(`[marketing] Facebook OK! ID: ${fbId}`);
+    if (ADMIN_CHAT_ID && BOT_TOKEN) {
+      // Preview mode — trimite la admin pentru aprobare
+      const postId = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
+      postQueue.set(postId, { ...content, imagePath, timestamp: Date.now() });
 
-    // Instagram
-    if (PUBLIC_URL && IG_ACCOUNT_ID) {
-      const filename = path.basename(imagePath);
-      const igId = await postToInstagram(`${PUBLIC_URL}/overlays/${filename}`, content.instagram);
-      console.log(`[marketing] Instagram OK! ID: ${igId}`);
+      const tgRes = await sendTelegramPreview(imagePath, content, postId);
+      if (tgRes.ok) {
+        console.log(`[marketing] Preview trimis pe Telegram. ID: ${postId}`);
+      } else {
+        console.error("[marketing] Telegram preview failed:", JSON.stringify(tgRes));
+        // Fallback: publică automat dacă Telegram nu merge
+        await publishPost(postId);
+      }
+
+      // Auto-expire după 2 ore dacă nu e aprobat
+      setTimeout(() => {
+        if (postQueue.has(postId)) {
+          console.log(`[marketing] Post ${postId} expirat fără aprobare.`);
+          rejectPost(postId);
+        }
+      }, 2 * 60 * 60 * 1000);
+
     } else {
-      console.log("[marketing] Instagram skipped — PUBLIC_URL sau IG_ACCOUNT_ID lipsesc");
+      // Auto-post mode — fără aprobare
+      const postId = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
+      postQueue.set(postId, { ...content, imagePath, timestamp: Date.now() });
+      await publishPost(postId);
+      console.log(`[marketing] Postat automat (fără TELEGRAM_ADMIN_CHAT_ID).`);
     }
-
-    // Cleanup după 30 min
-    setTimeout(() => { try { fs.unlinkSync(imagePath); } catch {} }, 30 * 60 * 1000);
 
   } catch (e) {
     console.error(`[marketing] Eroare: ${e.message}`);
@@ -269,4 +336,6 @@ cron.schedule("0 7 * * *", runMarketingPost, { timezone: "Europe/Bucharest" }); 
 cron.schedule("0 11 * * *", runMarketingPost, { timezone: "Europe/Bucharest" });  // 13:00 RO
 cron.schedule("0 16 * * *", runMarketingPost, { timezone: "Europe/Bucharest" });  // 18:00 RO
 
-console.log("📢 Marketing Bot pornit — postări la 09:00, 13:00, 18:00 (FB + IG cu imagine)");
+console.log("📢 Marketing Bot pornit — postări la 09:00, 13:00, 18:00 (cu aprobare Telegram)");
+
+module.exports = { approvePost, rejectPost };

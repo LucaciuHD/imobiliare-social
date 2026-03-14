@@ -205,6 +205,11 @@ Bun venit! Iată ce pot face:
 
 // Polling
 let lastUpdateId = 0;
+let _marketing = null;
+function getMarketing() {
+  if (!_marketing) _marketing = require("./marketingBot");
+  return _marketing;
+}
 
 async function poll() {
   try {
@@ -212,6 +217,28 @@ async function poll() {
     if (data.ok && data.result?.length) {
       for (const update of data.result) {
         lastUpdateId = update.update_id;
+
+        // Inline keyboard callbacks (aprobare/respingere postări marketing)
+        if (update.callback_query) {
+          const cb = update.callback_query;
+          const cbData = cb.data || "";
+          const cbChatId = cb.message?.chat?.id;
+          if (cbData.startsWith("mkt_ok_")) {
+            const postId = cbData.slice(7);
+            const result = await getMarketing().approvePost(postId, cbChatId);
+            await apiRequest("api.telegram.org", `/bot${BOT_TOKEN}/answerCallbackQuery`, "POST",
+              { callback_query_id: cb.id, text: result.text });
+            if (cbChatId) await sendTelegram(cbChatId, result.text);
+          } else if (cbData.startsWith("mkt_no_")) {
+            const postId = cbData.slice(7);
+            getMarketing().rejectPost(postId);
+            await apiRequest("api.telegram.org", `/bot${BOT_TOKEN}/answerCallbackQuery`, "POST",
+              { callback_query_id: cb.id, text: "❌ Postare respinsă și ștearsă." });
+            if (cbChatId) await sendTelegram(cbChatId, "❌ Postarea a fost respinsă.");
+          }
+          continue;
+        }
+
         const msg = update.message;
         if (!msg?.text) continue;
         const chatId = msg.chat.id;
